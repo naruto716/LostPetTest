@@ -51,25 +51,25 @@ def build_transforms(cfg, is_train=True):
         is_train: Whether to build training (with augmentations) or test transforms
     """
     normalize = transforms.Normalize(
-        mean=cfg.INPUT.PIXEL_MEAN, 
-        std=cfg.INPUT.PIXEL_STD
+        mean=cfg.PIXEL_MEAN, 
+        std=cfg.PIXEL_STD
     )
     
-    size = tuple(cfg.INPUT.SIZE_TRAIN if is_train else cfg.INPUT.SIZE_TEST)
+    size = cfg.IMAGE_SIZE
     
     if is_train:
         transform_list = [
             transforms.Resize(size),
-            transforms.Pad(cfg.INPUT.PADDING) if cfg.INPUT.PADDING > 0 else None,
-            transforms.RandomCrop(size) if cfg.INPUT.PADDING > 0 else None,
+            transforms.Pad(cfg.PADDING) if cfg.PADDING > 0 else None,
+            transforms.RandomCrop(size) if cfg.PADDING > 0 else None,
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.ToTensor(),
             normalize,
         ]
         
         # Add Random Erasing if enabled
-        if cfg.INPUT.RE_PROB > 0:
-            transform_list.append(RandomErasing(cfg.INPUT.RE_PROB))
+        if cfg.RE_PROB > 0:
+            transform_list.append(RandomErasing(cfg.RE_PROB))
             
     else:
         transform_list = [
@@ -98,7 +98,11 @@ class ReIDCollator:
             list(paths)                              # Paths as list of strings
         )
 
-def make_dataloaders(cfg):
+def make_dataloaders(cfg=None):
+    """Create train, query, and gallery dataloaders for Dog ReID"""
+    # Use simple config if none provided
+    if cfg is None:
+        from config import cfg
     """
     Create train, query, and gallery dataloaders for Dog ReID.
     
@@ -115,49 +119,49 @@ def make_dataloaders(cfg):
     train_transforms = build_transforms(cfg, is_train=True)
     test_transforms = build_transforms(cfg, is_train=False)
     
-    root = cfg.DATASETS.ROOT_DIR
+    root = cfg.ROOT_DIR
     
     # Create datasets
     train_set = DogMultiPose(
         root=root,
-        split_csv=cfg.DATASETS.TRAIN_SPLIT,
-        images_dir=cfg.DATASETS.IMAGES_DIR,
+        split_csv=cfg.TRAIN_SPLIT,
+        images_dir=cfg.IMAGES_DIR,
         transform=train_transforms,
-        use_camid=cfg.DATASETS.USE_CAMID,
+        use_camid=cfg.USE_CAMID,
         relabel=True  # Dense PIDs for training
     )
     
     query_set = DogMultiPose(
         root=root,
-        split_csv=cfg.DATASETS.QUERY_SPLIT,
-        images_dir=cfg.DATASETS.IMAGES_DIR,
+        split_csv=cfg.QUERY_SPLIT,
+        images_dir=cfg.IMAGES_DIR,
         transform=test_transforms,
-        use_camid=cfg.DATASETS.USE_CAMID,
+        use_camid=cfg.USE_CAMID,
         relabel=False  # Original PIDs for evaluation
     )
     
     gallery_set = DogMultiPose(
         root=root,
-        split_csv=cfg.DATASETS.GALLERY_SPLIT,
-        images_dir=cfg.DATASETS.IMAGES_DIR,
+        split_csv=cfg.GALLERY_SPLIT,
+        images_dir=cfg.IMAGES_DIR,
         transform=test_transforms,
-        use_camid=cfg.DATASETS.USE_CAMID,
+        use_camid=cfg.USE_CAMID,
         relabel=False  # Original PIDs for evaluation
     )
 
     # Create identity-balanced sampler for training
     sampler = RandomIdentitySampler(
         data_source=train_set,
-        batch_size=cfg.SOLVER.IMS_PER_BATCH,
-        num_instances=cfg.DATALOADER.NUM_INSTANCE
+        batch_size=cfg.IMS_PER_BATCH,
+        num_instances=cfg.NUM_INSTANCE
     )
 
     # Create dataloaders
     train_loader = DataLoader(
         train_set,
-        batch_size=cfg.SOLVER.IMS_PER_BATCH,
+        batch_size=cfg.IMS_PER_BATCH,
         sampler=sampler,
-        num_workers=cfg.DATALOADER.NUM_WORKERS,
+        num_workers=cfg.NUM_WORKERS,
         pin_memory=True,
         drop_last=True,
         collate_fn=ReIDCollator()
@@ -167,7 +171,7 @@ def make_dataloaders(cfg):
         query_set,
         batch_size=128,  # Fixed batch size for evaluation
         shuffle=False,
-        num_workers=cfg.DATALOADER.NUM_WORKERS,
+        num_workers=cfg.NUM_WORKERS,
         pin_memory=True,
         collate_fn=ReIDCollator()
     )
@@ -176,7 +180,7 @@ def make_dataloaders(cfg):
         gallery_set,
         batch_size=128,  # Fixed batch size for evaluation
         shuffle=False,
-        num_workers=cfg.DATALOADER.NUM_WORKERS,
+        num_workers=cfg.NUM_WORKERS,
         pin_memory=True,
         collate_fn=ReIDCollator()
     )
