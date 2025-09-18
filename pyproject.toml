@@ -6,6 +6,7 @@ requires-python = ">=3.13"
 dependencies = [
     "numpy>=2.3.3",
     "pillow>=11.3.0",
+    "psutil>=6.1.0",
     "scipy>=1.16.2",
     "timm>=1.0.19",
     "torch>=2.8.0",
