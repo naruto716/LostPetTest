@@ -1,0 +1,14 @@
+[project]
+name = "lostpettest"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.3.3",
+    "pillow>=11.3.0",
+    "scipy>=1.16.2",
+    "timm>=1.0.19",
+    "torch>=2.8.0",
+    "torchvision>=0.23.0",
+    "yacs>=0.1.8",
+]
