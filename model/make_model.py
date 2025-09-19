@@ -113,9 +113,9 @@ class DogReIDModel(nn.Module):
         elif return_mode == 'auto':
             # Automatic mode based on training state
             if self.training and self.classifier is not None:
-                # Training: return logits and pre-BN features
+                # Training: return logits and pre-BN features (CLIP-ReID style)
                 logits = self.classifier(bn_features)
-                return logits, features  # Pre-BN for triplet loss
+                return logits, features  # logits for ID loss, features for triplet loss
             else:
                 # Evaluation: return normalized features
                 return l2_normalize(bn_features)
