@@ -65,72 +65,82 @@ def build_dinov2_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module
     print(f"🚀 DINOv2 loaded successfully - Feature dim: {feat_dim} (Server-optimized!)")
     return model, feat_dim
 
+class DINOv3BackboneAdapter(nn.Module):
+    """Thin wrapper to expose Hugging Face DINOv3 outputs as feature vectors."""
+
+    def __init__(self, model: nn.Module):
+        super().__init__()
+        self.model = model
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        outputs = self.model(pixel_values=x)
+
+        # Prefer pooled representation when available.
+        pooler_output = getattr(outputs, "pooler_output", None)
+        if pooler_output is not None:
+            return pooler_output
+
+        # Fallback to CLS token / first position of hidden states.
+        if isinstance(outputs, tuple):
+            last_hidden_state = outputs[0]
+        else:
+            last_hidden_state = getattr(outputs, "last_hidden_state", None)
+
+        if last_hidden_state is None:
+            raise RuntimeError("DINOv3 model did not return hidden states")
+
+        return last_hidden_state[:, 0]
+
+
 def build_dinov3_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, int]:
     """
-    Build DINOv3 backbone - the latest and greatest from Facebook!
-    
-    DINOv3 improvements:
-    - 100x larger training dataset (1.7B images)
-    - Up to 7B parameters 
-    - Enhanced training strategies
-    - State-of-the-art performance across CV tasks
-    
-    Released August 2025 - cutting edge!
+    Build a DINOv3 backbone using Hugging Face Transformers.
+
+    Args:
+        name: Either a short alias (e.g. ``dinov3_large``) or a Hugging Face model id.
+        pretrained: Load pretrained weights when True, otherwise initialize from config.
     """
-    print(f"🔧 Building DINOv3 backbone: {name} (CUTTING EDGE!)")
-    
-    # Try torch.hub first (most convenient)
+    print(f"🔧 Building DINOv3 backbone via Hugging Face: {name}")
+
     try:
-        model = torch.hub.load('facebookresearch/dinov3', name, pretrained=pretrained, trust_repo=True)
-        print(f"✅ DINOv3 loaded via torch.hub")
-    except Exception as e:
-        print(f"⚠️  torch.hub failed: {e}")
-        print(f"🔄 Trying alternative loading method...")
-        
-        # Alternative: Load from HuggingFace transformers
-        try:
-            from transformers import AutoModel
-            hf_model_map = {
-                'dinov3_small': 'facebook/dinov3-small',
-                'dinov3_base': 'facebook/dinov3-base', 
-                'dinov3_large': 'facebook/dinov3-large',
-                'dinov3_giant': 'facebook/dinov3-giant'
-            }
-            
-            if name in hf_model_map:
-                model = AutoModel.from_pretrained(hf_model_map[name])
-                print(f"✅ DINOv3 loaded via HuggingFace transformers")
-            else:
-                raise ValueError(f"Unknown DINOv3 variant: {name}")
-                
-        except ImportError:
-            raise RuntimeError("DINOv3 requires 'transformers' library. Install with: pip install transformers")
-        except Exception as e2:
-            raise RuntimeError(f"Failed to load DINOv3: torch.hub failed ({e}), transformers failed ({e2})")
-    
-    # Get feature dimensions for DINOv3 variants
-    if hasattr(model, 'embed_dim'):
-        feat_dim = model.embed_dim
-    elif hasattr(model, 'config') and hasattr(model.config, 'hidden_size'):
-        feat_dim = model.config.hidden_size  # HuggingFace format
+        from transformers import AutoConfig, AutoModel
+    except ImportError as exc:
+        raise RuntimeError("DINOv3 backbones require the 'transformers' package") from exc
+
+    alias_map = {
+        'dinov3_small': 'facebook/dinov3-vits16-pretrain-lvd1689m',
+        'dinov3_base': 'facebook/dinov3-vitb16-pretrain-lvd1689m',
+        'dinov3_large': 'facebook/dinov3-vitl16-pretrain-lvd1689m',
+        'dinov3_giant': 'facebook/dinov3-vit7b16-pretrain-lvd1689m',
+    }
+
+    hf_name = alias_map.get(name, name)
+    if '/' not in hf_name:
+        raise ValueError(
+            f"Unknown DINOv3 variant '{name}'. Provide a known alias {list(alias_map.keys())} "
+            "or a Hugging Face repo id like 'facebook/dinov3-vits16-pretrain-lvd1689m'."
+        )
+
+    config = AutoConfig.from_pretrained(hf_name)
+    if pretrained:
+        model = AutoModel.from_pretrained(hf_name)
     else:
-        # DINOv3 typical dimensions (estimated based on model size)
-        if 'small' in name:
-            feat_dim = 384      # Small
-        elif 'base' in name:
-            feat_dim = 768      # Base  
-        elif 'large' in name:
-            feat_dim = 1024     # Large
-        elif 'giant' in name:
-            feat_dim = 1536     # Giant (7B params!)
-        else:
-            feat_dim = 1024     # Default to Large
-            
-    print(f"🚀 DINOv3 loaded successfully - Feature dim: {feat_dim} (NEXT-GEN!)")
-    print(f"   📊 Model trained on 1.7B images (100x more than DINOv2)")
-    print(f"   💪 Enhanced training strategies & data augmentation")
-    
-    return model, feat_dim
+        model = AutoModel.from_config(config)
+
+    wrapped_model = DINOv3BackboneAdapter(model)
+
+    # Determine feature dimensionality from config when possible.
+    if hasattr(config, 'hidden_size'):
+        feat_dim = config.hidden_size
+    elif hasattr(config, 'embed_dim'):
+        feat_dim = config.embed_dim
+    elif hasattr(config, 'hidden_sizes') and config.hidden_sizes:
+        feat_dim = config.hidden_sizes[-1]
+    else:
+        raise RuntimeError("Unable to infer feature dimension for DINOv3 model")
+
+    print(f"🚀 DINOv3 model '{hf_name}' loaded - feature dim: {feat_dim}")
+    return wrapped_model, feat_dim
 
 def build_resnet_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, int]:
     """Build ResNet backbone using timm."""
