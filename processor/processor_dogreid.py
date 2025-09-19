@@ -90,7 +90,7 @@ def do_train(
             img = img.to(device)
             target = pid.to(device)
             
-            with amp.autocast(device_type='cuda', enabled=True):
+            with amp.autocast(enabled=True):
                 # Forward pass
                 logits, features = model(img, return_mode='auto')
                 
