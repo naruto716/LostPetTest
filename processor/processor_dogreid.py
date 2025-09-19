@@ -55,8 +55,10 @@ def do_train(
     # Setup model for training
     model.to(device)
     if torch.cuda.device_count() > 1:
-        print(f'Using {torch.cuda.device_count()} GPUs for training')
+        print(f'🔧 Using {torch.cuda.device_count()} GPUs for training with DataParallel')
         model = nn.DataParallel(model)
+    else:
+        print(f'🔧 Using single GPU: {device}')
         
     # Training meters
     loss_meter = AverageMeter()
@@ -66,7 +68,7 @@ def do_train(
     evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.FEAT_NORM)
     
     # Mixed precision scaler
-    scaler = amp.GradScaler()
+    scaler = amp.GradScaler('cuda')
     
     # Training loop
     all_start_time = time.monotonic()
@@ -78,9 +80,6 @@ def do_train(
         acc_meter.reset()
         evaluator.reset()
         
-        # Step scheduler
-        scheduler.step()
-        
         # Training phase
         model.train()
         for n_iter, (img, pid, camid, _) in enumerate(train_loader):
@@ -91,7 +90,7 @@ def do_train(
             img = img.to(device)
             target = pid.to(device)
             
-            with amp.autocast(enabled=True):
+            with amp.autocast('cuda', enabled=True):
                 # Forward pass
                 logits, features = model(img, return_mode='auto')
                 
@@ -180,6 +179,9 @@ def do_train(
                 logger.info(f"🏆 New best model saved: mAP={mAP:.1%} at epoch {epoch}")
             
             torch.cuda.empty_cache()
+        
+        # Step scheduler at end of epoch
+        scheduler.step()
     
     all_end_time = time.monotonic()
     total_time = timedelta(seconds=all_end_time - all_start_time)
@@ -206,7 +208,8 @@ def do_inference(cfg, model, val_loader, num_query):
     evaluator.reset()
     
     # Setup model for evaluation
-    if torch.cuda.device_count() > 1:
+    if torch.cuda.device_count() > 1 and not isinstance(model, nn.DataParallel):
+        print(f'Wrapping model with DataParallel for evaluation')
         model = nn.DataParallel(model)
     model.to(device)
     model.eval()
