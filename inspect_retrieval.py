@@ -58,7 +58,7 @@ def inspect_retrieval_results(model_path=None, top_k=10, num_queries=20):
     
     if model_path and os.path.exists(model_path):
         print(f"📂 Loading trained weights from: {model_path}")
-        checkpoint = torch.load(model_path, map_location='cpu')
+        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
         if 'model' in checkpoint:
             model.load_state_dict(checkpoint['model'])
         else:

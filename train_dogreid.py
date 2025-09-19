@@ -165,7 +165,7 @@ def main():
     # Resume from checkpoint if provided
     if args.resume:
         logger.info(f"📂 Resuming from checkpoint: {args.resume}")
-        checkpoint = torch.load(args.resume, map_location='cpu')
+        checkpoint = torch.load(args.resume, map_location='cpu', weights_only=False)
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         scheduler.load_state_dict(checkpoint['scheduler'])

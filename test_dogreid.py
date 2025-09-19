@@ -69,7 +69,7 @@ def main():
     
     # Load checkpoint
     logger.info(f"📂 Loading checkpoint...")
-    checkpoint = torch.load(args.checkpoint, map_location='cpu')
+    checkpoint = torch.load(args.checkpoint, map_location='cpu', weights_only=False)
     
     if 'model' in checkpoint:
         model.load_state_dict(checkpoint['model'])
