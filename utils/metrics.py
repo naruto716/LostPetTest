@@ -20,7 +20,7 @@ def euclidean_distance(qf, gf):
     n = gf.shape[0]
     dist_mat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
                torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
-    dist_mat.addmm_(1, -2, qf, gf.t())
+    dist_mat.addmm_(qf, gf.t(), beta=1, alpha=-2)
     return dist_mat.cpu().numpy()
 
 def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
@@ -146,6 +146,15 @@ class R1_mAP_eval():
         g_camids = np.asarray(self.camids[self.num_query:])
         
         print('=> Computing DistMat with euclidean_distance')
+        
+        # Debug: Check PID overlap
+        print(f"Query PIDs: {sorted(set(q_pids))}")
+        print(f"Gallery PIDs: {sorted(set(g_pids))}")
+        query_set = set(q_pids)
+        gallery_set = set(g_pids)
+        overlap = query_set.intersection(gallery_set)
+        print(f"PID overlap: {sorted(overlap)} ({len(overlap)} identities)")
+        
         distmat = euclidean_distance(qf, gf)
         cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids, self.max_rank)
         

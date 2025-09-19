@@ -7,6 +7,8 @@ import logging
 import os
 import time
 from datetime import timedelta
+
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.cuda import amp
@@ -18,12 +20,12 @@ def do_train(
     model,
     center_criterion,
     train_loader,
-    val_loader,
+    query_loader,
+    gallery_loader,
     optimizer,
     optimizer_center,
     scheduler,
     loss_fn,
-    num_query,
     start_epoch=1
 ):
     """
@@ -34,12 +36,12 @@ def do_train(
         model: Model to train
         center_criterion: Center loss criterion (can be None)
         train_loader: Training data loader
-        val_loader: Validation data loader (query + gallery)
+        query_loader: Query data loader for evaluation
+        gallery_loader: Gallery data loader for evaluation
         optimizer: Main optimizer
         optimizer_center: Center loss optimizer (can be None)
         scheduler: Learning rate scheduler
         loss_fn: Loss function
-        num_query: Number of query samples in val_loader
         start_epoch: Starting epoch number
     """
     log_period = cfg.LOG_PERIOD
@@ -64,8 +66,7 @@ def do_train(
     loss_meter = AverageMeter()
     acc_meter = AverageMeter()
     
-    # Evaluator
-    evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.FEAT_NORM)
+    # Note: Evaluator is now handled in do_inference with separate loaders
     
     # Mixed precision scaler
     scaler = amp.GradScaler()
@@ -78,7 +79,6 @@ def do_train(
         start_time = time.time()
         loss_meter.reset()
         acc_meter.reset()
-        evaluator.reset()
         
         # Training phase
         model.train()
@@ -157,7 +157,7 @@ def do_train(
         # Evaluation
         if epoch % eval_period == 0:
             logger.info(f"🔍 Evaluating at epoch {epoch}")
-            cmc, mAP = do_inference(cfg, model, val_loader, num_query)
+            cmc, mAP = do_inference(cfg, model, query_loader, gallery_loader)
             
             logger.info("Validation Results - Epoch: {}".format(epoch))
             logger.info("mAP: {:.1%}".format(mAP))
@@ -188,24 +188,21 @@ def do_train(
     logger.info("Total running time: {}".format(total_time))
     logger.info(f"🏆 Best mAP achieved: {best_mAP:.1%}")
 
-def do_inference(cfg, model, val_loader, num_query):
+def do_inference(cfg, model, query_loader, gallery_loader):
     """
-    Perform inference and evaluation.
+    Perform inference and evaluation using separate query and gallery loaders.
     
     Args:
         cfg: Configuration object  
         model: Model to evaluate
-        val_loader: Validation data loader (query + gallery)
-        num_query: Number of query samples
+        query_loader: Query data loader 
+        gallery_loader: Gallery data loader
     Returns:
         cmc: Cumulative matching characteristics
         mAP: Mean average precision  
     """
     device = "cuda" if torch.cuda.is_available() else "cpu"
     logger = logging.getLogger("dogreid.test")
-    
-    evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.FEAT_NORM)
-    evaluator.reset()
     
     # Setup model for evaluation
     if torch.cuda.device_count() > 1 and not isinstance(model, nn.DataParallel):
@@ -214,15 +211,54 @@ def do_inference(cfg, model, val_loader, num_query):
     model.to(device)
     model.eval()
     
-    with torch.no_grad():
-        for n_iter, (img, pid, camid, _) in enumerate(val_loader):
-            img = img.to(device)
-            
-            # Extract features
-            feat = model(img, return_mode='features')
-            evaluator.update((feat, pid, camid))
+    # Extract query features
+    logger.info("📊 Extracting query features...")
+    query_features, query_pids, query_camids = [], [], []
     
-    # Compute metrics
-    cmc, mAP, _, _, _, _, _ = evaluator.compute()
+    with torch.no_grad():
+        for n_iter, (img, pid, camid, _) in enumerate(query_loader):
+            img = img.to(device)
+            feat = model(img, return_mode='features')  # L2-normalized features
+            
+            query_features.append(feat.cpu())
+            query_pids.extend(pid.numpy())
+            query_camids.extend(camid.numpy())
+    
+    # Extract gallery features  
+    logger.info("📊 Extracting gallery features...")
+    gallery_features, gallery_pids, gallery_camids = [], [], []
+    
+    with torch.no_grad():
+        for n_iter, (img, pid, camid, _) in enumerate(gallery_loader):
+            img = img.to(device)
+            feat = model(img, return_mode='features')  # L2-normalized features
+            
+            gallery_features.append(feat.cpu())
+            gallery_pids.extend(pid.numpy())
+            gallery_camids.extend(camid.numpy())
+    
+    # Concatenate all features
+    qf = torch.cat(query_features, dim=0)
+    gf = torch.cat(gallery_features, dim=0) 
+    
+    q_pids = np.array(query_pids)
+    q_camids = np.array(query_camids)
+    g_pids = np.array(gallery_pids)
+    g_camids = np.array(gallery_camids)
+    
+    logger.info(f"Query: {len(qf)} samples, {len(set(q_pids))} identities")
+    logger.info(f"Gallery: {len(gf)} samples, {len(set(g_pids))} identities")
+    
+    # Debug: Check PID overlap  
+    query_set = set(q_pids)
+    gallery_set = set(g_pids)
+    overlap = query_set.intersection(gallery_set)
+    logger.info(f"PID overlap: {len(overlap)} identities out of {len(query_set)} query IDs")
+    
+    # Compute distance matrix and evaluate
+    logger.info("🧮 Computing distance matrix...")
+    from utils.metrics import euclidean_distance, eval_func
+    distmat = euclidean_distance(qf, gf)
+    cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50)
     
     return cmc, mAP

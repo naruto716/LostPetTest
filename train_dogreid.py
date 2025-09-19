@@ -86,17 +86,25 @@ def main():
     logger.info("📊 Creating data loaders...")
     train_loader, query_loader, gallery_loader, num_classes = make_dataloaders(cfg)
     
-    # Combine query and gallery for evaluation
-    val_dataset = torch.utils.data.ConcatDataset([query_loader.dataset, gallery_loader.dataset])
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        batch_size=64,  # Larger batch for inference
+    # Keep query and gallery loaders separate (proper ReID approach)
+    # Update batch size for faster inference
+    query_loader = torch.utils.data.DataLoader(
+        query_loader.dataset,
+        batch_size=64,
         shuffle=False,
         num_workers=cfg.NUM_WORKERS,
         pin_memory=True,
         collate_fn=query_loader.collate_fn
     )
-    num_query = len(query_loader.dataset)
+    
+    gallery_loader = torch.utils.data.DataLoader(
+        gallery_loader.dataset, 
+        batch_size=64,
+        shuffle=False,
+        num_workers=cfg.NUM_WORKERS,
+        pin_memory=True,
+        collate_fn=gallery_loader.collate_fn
+    )
     
     logger.info(f"   Training samples: {len(train_loader.dataset)}")
     logger.info(f"   Query samples: {len(query_loader.dataset)}")
@@ -169,7 +177,7 @@ def main():
     if args.eval_only:
         logger.info("🔍 Evaluation only mode")
         from processor import do_inference
-        cmc, mAP = do_inference(cfg, model, val_loader, num_query)
+        cmc, mAP = do_inference(cfg, model, query_loader, gallery_loader)
         logger.info("Evaluation Results:")
         logger.info("mAP: {:.1%}".format(mAP))
         for r in [1, 5, 10]:
@@ -183,12 +191,12 @@ def main():
         model=model,
         center_criterion=center_criterion,
         train_loader=train_loader,
-        val_loader=val_loader,
+        query_loader=query_loader,
+        gallery_loader=gallery_loader,
         optimizer=optimizer,
         optimizer_center=optimizer_center,
         scheduler=scheduler,
         loss_fn=loss_fn,
-        num_query=num_query,
         start_epoch=start_epoch
     )
     
