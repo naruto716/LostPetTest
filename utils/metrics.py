@@ -58,10 +58,11 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
         q_pid = q_pids[q_idx]
         q_camid = q_camids[q_idx]
 
-        # Remove gallery samples that have the same pid and camid with query
+        # For dog ReID: Don't remove based on camera ID, only avoid exact duplicates
+        # In person ReID, same camera removal makes sense, but not for dogs
         order = indices[q_idx]
-        remove = (g_pids[order] == q_pid) & (g_camids[order] == q_camid)
-        keep = np.invert(remove)
+        # For now, keep all gallery samples (no camera-based removal)
+        keep = np.ones(len(order), dtype=bool)
 
         # Compute CMC curve
         orig_cmc = matches[q_idx][keep]
