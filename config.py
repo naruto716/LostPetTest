@@ -25,7 +25,7 @@ class Config:
     RE_PROB = 0.5             # Random erasing probability
     
     # Model architecture (scaled up for server!)
-    BACKBONE = 'dinov2_vitl14'  # ViT-L/14 instead of ViT-B/14 - much more powerful! 🚀
+    BACKBONE = 'dinov3_vitl16'  # DINOv3-L - cutting edge with manageable memory! 🚀
     EMBED_DIM = 768            # Larger embedding (1024->768 to prevent overfitting)
     PRETRAINED = True          # Use pretrained weights
     BN_NECK = True            # Use BN-neck (important for ReID)

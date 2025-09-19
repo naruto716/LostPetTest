@@ -154,11 +154,10 @@ def compare_models():
     for i, img_file in enumerate(image_files):
         print(f"   {i}: {img_file}")
     
-    # Test models - let's see what that 7B monster can do!
+    # Test models - DINOv2 vs DINOv3 Large comparison
     models_to_test = [
         ("DINOv2-L", "dinov2_vitl14"),      # Your proven baseline (1024-dim)
-        ("DINOv3-L", "dinov3_vitl16"),      # Large DINOv3 (1024-dim) 
-        ("DINOv3-7B", "dinov3_vit7b16"),    # 7 BILLION parameters! 🔥 (4096-dim)
+        ("DINOv3-L", "dinov3_vitl16"),      # Large DINOv3 (1024-dim) - fair comparison!
     ]
     
     results = {}
@@ -194,8 +193,7 @@ def compare_models():
         
         # Get all successful results
         dinov2_result = results.get("DINOv2-L")
-        dinov3l_result = results.get("DINOv3-L") 
-        dinov3_7b_result = results.get("DINOv3-7B")
+        dinov3l_result = results.get("DINOv3-L")
         
         # Performance comparison table
         print(f"📈 PERFORMANCE COMPARISON:")
@@ -244,37 +242,38 @@ def compare_models():
         print(f"   ⚡ Fastest Inference: {fastest_model['name']} ({fastest_model['fps']:.1f} fps)")
         print(f"   💾 Most Memory Efficient: {most_efficient['name']} ({most_efficient['memory']:.0f} MB)")
             
-        # Special analysis for 7B model if it loaded
-        if dinov3_7b_result:
-            print(f"\n🔥 DINOv3-7B ANALYSIS:")
-            dinov3_7b_fps = len(batch) / dinov3_7b_result['inference_time']
-            dinov3_7b_disc = dinov3_7b_result['quality']['discrimination']
+        # Head-to-head analysis
+        if dinov2_result and dinov3l_result:
+            print(f"\n🥊 HEAD-TO-HEAD ANALYSIS:")
+            dinov2_disc = dinov2_result['quality']['discrimination']
+            dinov3l_disc = dinov3l_result['quality']['discrimination']
+            improvement = (dinov3l_disc - dinov2_disc) / dinov2_disc * 100
             
-            if dinov2_result:
-                dinov2_disc = dinov2_result['quality']['discrimination']
-                improvement = (dinov3_7b_disc - dinov2_disc) / dinov2_disc * 100
-                print(f"   vs DINOv2-L: {improvement:+.1f}% better discrimination")
-                
-            if dinov3l_result:
-                dinov3l_disc = dinov3l_result['quality']['discrimination'] 
-                improvement = (dinov3_7b_disc - dinov3l_disc) / dinov3l_disc * 100
-                print(f"   vs DINOv3-L: {improvement:+.1f}% better discrimination")
-                
-            print(f"   Performance cost: {dinov3_7b_fps:.1f} fps, {dinov3_7b_result['memory_mb']:.0f} MB")
-            print(f"   Worth it? {'🚀 YES!' if dinov3_7b_disc > best_discrimination * 0.95 else '🤔 Maybe - high cost'}")
+            dinov2_fps = len(batch) / dinov2_result['inference_time']
+            dinov3l_fps = len(batch) / dinov3l_result['inference_time']
+            speed_change = (dinov3l_fps - dinov2_fps) / dinov2_fps * 100
+            
+            print(f"   🎯 Feature Quality: DINOv3-L {improvement:+.1f}% vs DINOv2-L")
+            print(f"   ⚡ Speed: DINOv3-L {speed_change:+.1f}% vs DINOv2-L") 
+            print(f"   💾 Memory: {dinov3l_result['memory_mb']:.0f} MB vs {dinov2_result['memory_mb']:.0f} MB")
                 
         # Overall recommendation
         print(f"\n💡 FINAL RECOMMENDATION:")
-        if best_model == "DINOv3-7B" and dinov3_7b_result['memory_mb'] < 20000:  # Under 20GB
-            print(f"   🔥 Go with DINOv3-7B! Best quality and your server can handle it!")
-        elif best_model.startswith("DINOv3"):
-            print(f"   🚀 Upgrade to {best_model}! Better than DINOv2 on dog ReID!")
+        if best_model == "DINOv3-L":
+            if dinov2_result and dinov3l_result:
+                improvement = (dinov3l_result['quality']['discrimination'] - dinov2_result['quality']['discrimination']) / dinov2_result['quality']['discrimination'] * 100
+                if improvement > 5:
+                    print(f"   🚀 Upgrade to DINOv3-L! {improvement:+.1f}% better dog discrimination!")
+                else:
+                    print(f"   🤔 DINOv3-L is slightly better (+{improvement:.1f}%) but DINOv2-L is still solid")
+            else:
+                print(f"   🚀 DINOv3-L wins! Better feature quality for dog ReID!")
         elif best_model == "DINOv2-L":
             print(f"   🛡️  DINOv2-L still reigns! Proven performance for dog ReID.")
         else:
-            print(f"   🔬 All models perform similarly - choose based on your priorities")
+            print(f"   🔬 Both models perform similarly - choose based on your priorities")
     
-    print(f"\n✅ Comparison complete! All models tested on your 4x A10G server hardware.")
+    print(f"\n✅ DINOv2 vs DINOv3 comparison complete! Both models tested on your A10G.")
     return results
 
 if __name__ == '__main__':

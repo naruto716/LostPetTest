@@ -117,12 +117,8 @@ class DINOv3BackboneAdapter(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         outputs = self.model(pixel_values=x)
 
-        # Prefer pooled representation when available.
-        pooler_output = getattr(outputs, "pooler_output", None)
-        if pooler_output is not None:
-            return pooler_output
-
-        # Fallback to CLS token / first position of hidden states.
+        # For ReID: Use CLS token (better for global image representation)
+        # CLS token is specifically designed for classification/retrieval tasks
         if isinstance(outputs, tuple):
             last_hidden_state = outputs[0]
         else:
@@ -131,7 +127,7 @@ class DINOv3BackboneAdapter(nn.Module):
         if last_hidden_state is None:
             raise RuntimeError("DINOv3 model did not return hidden states")
 
-        return last_hidden_state[:, 0]
+        return last_hidden_state[:, 0]  # CLS token [B, hidden_dim]
 
 
 def build_dinov3_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, int]:
@@ -156,23 +152,12 @@ def build_dinov3_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module
         'dinov3_vit7b16': 'facebook/dinov3-vit7b16-pretrain-lvd1689m',
     }
 
-    legacy_aliases = {
-        'dinov3_small': 'dinov3_vits16',
-        'dinov3_base': 'dinov3_vitb16',
-        'dinov3_large': 'dinov3_vitl16',
-        'dinov3_giant': 'dinov3_vit7b16',
-    }
-
-    normalized_name = legacy_aliases.get(name, name)
-    if normalized_name != name:
-        print(f"⚠️  Deprecated DINOv3 name '{name}' — using '{normalized_name}' instead.")
-
-    hf_name = official_aliases.get(normalized_name, normalized_name)
+    hf_name = official_aliases.get(name, name)
     if '/' not in hf_name:
         valid = ", ".join(sorted(official_aliases))
         raise ValueError(f"Unknown DINOv3 variant '{name}'. Use one of: {valid}")
 
-    printable = f"{normalized_name} ({hf_name})" if normalized_name != hf_name else hf_name
+    printable = f"{name} ({hf_name})" if name != hf_name else hf_name
     print(f"🔧 Building DINOv3 backbone via Hugging Face: {printable}")
 
     hf_token = _load_hf_token()
