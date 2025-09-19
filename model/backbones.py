@@ -3,10 +3,13 @@ Pluggable backbone architectures for Dog ReID.
 Supports DINOv2, with easy extension to ResNet, Swin, etc.
 """
 
+import os
+from pathlib import Path
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 import timm
-from typing import Tuple
 
 def build_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, int]:
     """
@@ -65,6 +68,36 @@ def build_dinov2_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module
     print(f"🚀 DINOv2 loaded successfully - Feature dim: {feat_dim} (Server-optimized!)")
     return model, feat_dim
 
+
+def _load_hf_token() -> str:
+    """Return the Hugging Face token from env or a local .env file."""
+    token = os.getenv("HF_TOKEN")
+    if token:
+        return token.strip()
+
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            key, sep, value = stripped.partition("=")
+            if key.strip() == "HF_TOKEN" and sep:
+                return value.strip().strip('"').strip("'")
+    return ""
+
+
+def _from_pretrained_with_token(loader, hf_name: str, token: str):
+    """Call a Hugging Face loader with the provided token if necessary."""
+    if not token:
+        return loader(hf_name)
+
+    try:
+        return loader(hf_name, token=token)
+    except TypeError:
+        return loader(hf_name, use_auth_token=token)
+
+
 class DINOv3BackboneAdapter(nn.Module):
     """Thin wrapper to expose Hugging Face DINOv3 outputs as feature vectors."""
 
@@ -121,9 +154,20 @@ def build_dinov3_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module
             "or a Hugging Face repo id like 'facebook/dinov3-vits16-pretrain-lvd1689m'."
         )
 
-    config = AutoConfig.from_pretrained(hf_name)
+    hf_token = _load_hf_token()
+
+    try:
+        config = _from_pretrained_with_token(AutoConfig.from_pretrained, hf_name, hf_token)
+    except Exception as exc:
+        if not hf_token:
+            raise RuntimeError(
+                "Access to gated DINOv3 checkpoints requires an HF access token. "
+                "Set HF_TOKEN in your environment or .env file."
+            ) from exc
+        raise
+
     if pretrained:
-        model = AutoModel.from_pretrained(hf_name)
+        model = _from_pretrained_with_token(AutoModel.from_pretrained, hf_name, hf_token)
     else:
         model = AutoModel.from_config(config)
 
