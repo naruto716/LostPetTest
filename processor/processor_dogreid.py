@@ -92,7 +92,7 @@ def do_train(
             
             with amp.autocast():
                 # Forward pass
-                logits, features = model(img, return_mode='auto')
+                logits, features = model(img, 'auto')  # Positional args for DataParallel
                 
                 # Compute loss
                 loss, loss_dict = loss_fn(logits, features, target)
@@ -218,7 +218,7 @@ def do_inference(cfg, model, query_loader, gallery_loader):
     with torch.no_grad():
         for n_iter, (img, pid, camid, _) in enumerate(query_loader):
             img = img.to(device)
-            feat = model(img, return_mode='features')  # L2-normalized features
+            feat = model(img, 'features')  # L2-normalized features (positional args for DataParallel)
             
             query_features.append(feat.cpu())
             query_pids.extend(pid.numpy())
@@ -231,7 +231,7 @@ def do_inference(cfg, model, query_loader, gallery_loader):
     with torch.no_grad():
         for n_iter, (img, pid, camid, _) in enumerate(gallery_loader):
             img = img.to(device)
-            feat = model(img, return_mode='features')  # L2-normalized features
+            feat = model(img, 'features')  # L2-normalized features (positional args for DataParallel)
             
             gallery_features.append(feat.cpu())
             gallery_pids.extend(pid.numpy())
