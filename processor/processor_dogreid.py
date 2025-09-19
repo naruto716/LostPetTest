@@ -68,7 +68,7 @@ def do_train(
     evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.FEAT_NORM)
     
     # Mixed precision scaler
-    scaler = amp.GradScaler('cuda')
+    scaler = amp.GradScaler()
     
     # Training loop
     all_start_time = time.monotonic()
@@ -90,7 +90,7 @@ def do_train(
             img = img.to(device)
             target = pid.to(device)
             
-            with amp.autocast(enabled=True):
+            with amp.autocast():
                 # Forward pass
                 logits, features = model(img, return_mode='auto')
                 
