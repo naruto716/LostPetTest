@@ -70,10 +70,19 @@ def build_dinov2_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module
 
 
 def _load_hf_token() -> str:
-    """Return the Hugging Face token from env or a local .env file."""
+    """Return the Hugging Face token from env, login cache, or local .env."""
     token = os.getenv("HF_TOKEN")
     if token:
         return token.strip()
+
+    try:
+        from huggingface_hub import get_token
+    except ImportError:
+        token = None
+    else:
+        token = get_token()
+        if token:
+            return token
 
     env_path = Path(__file__).resolve().parents[1] / ".env"
     if env_path.exists():
@@ -130,29 +139,41 @@ def build_dinov3_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module
     Build a DINOv3 backbone using Hugging Face Transformers.
 
     Args:
-        name: Either a short alias (e.g. ``dinov3_large``) or a Hugging Face model id.
+        name: Either a canonical alias (``dinov3_vitl16``) or a Hugging Face repo id.
         pretrained: Load pretrained weights when True, otherwise initialize from config.
     """
-    print(f"🔧 Building DINOv3 backbone via Hugging Face: {name}")
-
     try:
         from transformers import AutoConfig, AutoModel
     except ImportError as exc:
         raise RuntimeError("DINOv3 backbones require the 'transformers' package") from exc
 
-    alias_map = {
-        'dinov3_small': 'facebook/dinov3-vits16-pretrain-lvd1689m',
-        'dinov3_base': 'facebook/dinov3-vitb16-pretrain-lvd1689m',
-        'dinov3_large': 'facebook/dinov3-vitl16-pretrain-lvd1689m',
-        'dinov3_giant': 'facebook/dinov3-vit7b16-pretrain-lvd1689m',
+    official_aliases = {
+        'dinov3_vits16': 'facebook/dinov3-vits16-pretrain-lvd1689m',
+        'dinov3_vits16plus': 'facebook/dinov3-vits16plus-pretrain-lvd1689m',
+        'dinov3_vitb16': 'facebook/dinov3-vitb16-pretrain-lvd1689m',
+        'dinov3_vitl16': 'facebook/dinov3-vitl16-pretrain-lvd1689m',
+        'dinov3_vith16plus': 'facebook/dinov3-vith16plus-pretrain-lvd1689m',
+        'dinov3_vit7b16': 'facebook/dinov3-vit7b16-pretrain-lvd1689m',
     }
 
-    hf_name = alias_map.get(name, name)
+    legacy_aliases = {
+        'dinov3_small': 'dinov3_vits16',
+        'dinov3_base': 'dinov3_vitb16',
+        'dinov3_large': 'dinov3_vitl16',
+        'dinov3_giant': 'dinov3_vit7b16',
+    }
+
+    normalized_name = legacy_aliases.get(name, name)
+    if normalized_name != name:
+        print(f"⚠️  Deprecated DINOv3 name '{name}' — using '{normalized_name}' instead.")
+
+    hf_name = official_aliases.get(normalized_name, normalized_name)
     if '/' not in hf_name:
-        raise ValueError(
-            f"Unknown DINOv3 variant '{name}'. Provide a known alias {list(alias_map.keys())} "
-            "or a Hugging Face repo id like 'facebook/dinov3-vits16-pretrain-lvd1689m'."
-        )
+        valid = ", ".join(sorted(official_aliases))
+        raise ValueError(f"Unknown DINOv3 variant '{name}'. Use one of: {valid}")
+
+    printable = f"{normalized_name} ({hf_name})" if normalized_name != hf_name else hf_name
+    print(f"🔧 Building DINOv3 backbone via Hugging Face: {printable}")
 
     hf_token = _load_hf_token()
 
@@ -208,12 +229,14 @@ def build_vit_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, i
 
 # Registry for easy backbone access (optimized for server hardware)
 BACKBONE_REGISTRY = {
-    # DINOv3 variants (CUTTING EDGE - Aug 2025!) 🔥
-    'dinov3_small': 384,    # Small - 100x more training data than DINOv2!
-    'dinov3_base': 768,     # Base - enhanced training strategies  
-    'dinov3_large': 1024,   # Large - perfect for your server 🚀
-    'dinov3_giant': 1536,   # Giant - 7B parameters! 💪
-    
+    # DINOv3 variants (Hugging Face canonical names)
+    'dinov3_vits16': 384,
+    'dinov3_vits16plus': 384,  # hidden size resolved at runtime
+    'dinov3_vitb16': 768,
+    'dinov3_vitl16': 1024,
+    'dinov3_vith16plus': 1280,
+    'dinov3_vit7b16': 4096,
+
     # DINOv2 variants (your proven choice - still excellent!)
     'dinov2_vits14': 384,   # Small - for quick experiments
     'dinov2_vitb14': 768,   # Base - your original success
