@@ -29,6 +29,8 @@ def build_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, int]:
         return build_dinov3_backbone(name, pretrained)
     elif name.startswith('dinov2'):
         return build_dinov2_backbone(name, pretrained)
+    elif name.startswith('swin') and 'multilevel' in name:
+        return build_swin_multilevel_backbone(name, pretrained)
     elif name.startswith('swin'):
         return build_swin_backbone(name, pretrained)
     elif name.startswith('resnet'):
@@ -367,6 +369,137 @@ def build_swin_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, 
     print(f"🚀 SWIN loaded successfully - Feature dim: {feat_dim}")
     return model, feat_dim
 
+
+class SWINMultiLevelAdapter(nn.Module):
+    """
+    🧪 RESEARCH: Multi-level feature extraction from SWIN
+    TRUE multi-scale features with hierarchical downsampling!
+    Perfect adaptation of Tiger ReID regional pooling concept.
+    """
+
+    def __init__(self, model: nn.Module, extract_stages: list = None):
+        super().__init__()
+        self.model = model
+        
+        # Default: Extract from multiple SWIN stages
+        if extract_stages is None:
+            # All 4 SWIN stages for maximum multi-scale diversity
+            self.extract_stages = [0, 1, 2, 3]  # Stage 1, 2, 3, 4
+        else:
+            self.extract_stages = extract_stages
+            
+        self.stage_features = []
+        self._register_hooks()
+        
+        print(f"🧪 Multi-level SWIN: extracting from stages {[s+1 for s in self.extract_stages]}")
+
+    def _register_hooks(self):
+        """Register forward hooks to capture stage outputs"""
+        def make_hook(stage_idx):
+            def hook(module, input, output):
+                # SWIN stages output [B, H*W, C] format
+                # Need to extract meaningful features
+                if isinstance(output, tuple):
+                    features = output[0]
+                else:
+                    features = output
+                
+                # Global average pooling over spatial dimensions
+                # Shape: [B, H*W, C] -> [B, C]
+                pooled_features = features.mean(dim=1)
+                self.stage_features.append(pooled_features)
+            return hook
+
+        # Register hooks on SWIN stages/layers
+        stage_names = ['layers.0', 'layers.1', 'layers.2', 'layers.3']  # SWIN stages
+        
+        for i, stage_idx in enumerate(self.extract_stages):
+            if stage_idx < len(stage_names):
+                # Try to find the stage in the model
+                try:
+                    stage_module = self.model
+                    for attr in stage_names[stage_idx].split('.'):
+                        stage_module = getattr(stage_module, attr)
+                    
+                    stage_module.register_forward_hook(make_hook(stage_idx))
+                    print(f"   ✅ Registered hook on {stage_names[stage_idx]}")
+                except AttributeError:
+                    print(f"   ❌ Could not find stage {stage_names[stage_idx]}")
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Clear previous stage features
+        self.stage_features = []
+        
+        # Forward pass - hooks will capture stage features
+        output = self.model(x)
+        
+        if not self.stage_features:
+            # Fallback: use final output if hooks didn't work
+            print("⚠️ Hooks didn't capture features, using final output")
+            if hasattr(output, 'last_hidden_state'):
+                final_features = output.last_hidden_state.mean(dim=1)
+            else:
+                final_features = output.mean(dim=1) if len(output.shape) == 3 else output
+            return final_features
+        
+        # Concatenate all multi-level stage features
+        # Each stage: [batch, stage_dim] -> concat -> [batch, sum(stage_dims)]
+        multi_level_features = torch.cat(self.stage_features, dim=1)
+        
+        return multi_level_features
+
+
+def build_swin_multilevel_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, int]:
+    """
+    🧪 RESEARCH: Build SWIN with multi-level stage extraction
+    TRUE hierarchical multi-scale features - perfect for ReID!
+    """
+    try:
+        import timm
+    except ImportError:
+        raise ImportError("Please install timm: pip install timm")
+    
+    # Map our names to timm model names
+    swin_model_map = {
+        'swin_tiny_patch4_window7_224_multilevel': 'swin_tiny_patch4_window7_224',
+        'swin_small_patch4_window7_224_multilevel': 'swin_small_patch4_window7_224', 
+        'swin_base_patch4_window7_224_multilevel': 'swin_base_patch4_window7_224',
+        'swin_large_patch4_window7_224_multilevel': 'swin_large_patch4_window7_224',
+    }
+    
+    base_name = name.replace('_multilevel', '')
+    timm_name = swin_model_map.get(name, base_name)
+    
+    print(f"🔧 Building multi-level SWIN backbone: {base_name} -> {timm_name}")
+    
+    # Create model without classification head but keep intermediate features
+    model = timm.create_model(timm_name, pretrained=pretrained, num_classes=0)
+    
+    # Wrap with multi-level adapter
+    wrapped_model = SWINMultiLevelAdapter(model)
+
+    # Calculate expected multi-level feature dimension
+    # SWIN stage dimensions (typical):
+    if 'tiny' in name:
+        stage_dims = [96, 192, 384, 768]
+    elif 'small' in name:
+        stage_dims = [96, 192, 384, 768] 
+    elif 'base' in name:
+        stage_dims = [128, 256, 512, 1024]
+    elif 'large' in name:
+        stage_dims = [192, 384, 768, 1536]
+    else:
+        # Default to small
+        stage_dims = [96, 192, 384, 768]
+    
+    multi_level_feat_dim = sum(stage_dims)  # Sum all stage dimensions
+    
+    print(f"🧪 Multi-level SWIN model '{timm_name}' loaded")
+    print(f"   Stage dimensions: {stage_dims}")
+    print(f"   Final feature dim: {multi_level_feat_dim}")
+    
+    return wrapped_model, multi_level_feat_dim
+
 # Registry for easy backbone access (optimized for server hardware)
 BACKBONE_REGISTRY = {
     # DINOv3 variants (Hugging Face canonical names)
@@ -394,6 +527,12 @@ BACKBONE_REGISTRY = {
     'swin_base_patch4_window7_224': 1024,     # SWIN-B - Good research baseline
     'swin_large_patch4_window7_224': 1536,    # SWIN-L - Strong but not dominant
     'swin_large_patch4_window12_384': 1536,   # SWIN-L 384 - Higher resolution
+    
+    # 🧪 RESEARCH: Multi-level SWIN (TRUE hierarchical multi-scale!)
+    'swin_tiny_patch4_window7_224_multilevel': 1440,    # 96+192+384+768 = 1440D 🎯 PERFECT!
+    'swin_small_patch4_window7_224_multilevel': 1440,   # Same architecture as tiny
+    'swin_base_patch4_window7_224_multilevel': 1920,    # 128+256+512+1024 = 1920D
+    'swin_large_patch4_window7_224_multilevel': 2880,   # 192+384+768+1536 = 2880D
     
     # Standard backbones (for comparison)
     'resnet50': 2048,
