@@ -75,6 +75,18 @@ def do_train(
     all_start_time = time.monotonic()
     best_mAP = 0.0
     
+    # 🔍 Zero-shot evaluation before training starts
+    if start_epoch == 1:  # Only on fresh training
+        logger.info("🚀 Zero-shot evaluation (before training)...")
+        cmc, mAP = do_inference(cfg, model, query_loader, gallery_loader)
+        
+        logger.info("Zero-shot Results (Epoch 0)")
+        logger.info("mAP: {:.1%}".format(mAP))
+        for r in [1, 5, 10]:
+            logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+        logger.info("=" * 50)
+        torch.cuda.empty_cache()
+    
     for epoch in range(start_epoch, epochs + 1):
         start_time = time.time()
         loss_meter.reset()
