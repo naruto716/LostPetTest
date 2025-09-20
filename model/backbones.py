@@ -397,34 +397,26 @@ class SWINMultiLevelAdapter(nn.Module):
         """Register forward hooks to capture stage outputs"""
         def make_hook(stage_idx):
             def hook(module, input, output):
-                # SWIN stages output [B, H*W, C] format
-                # Need to extract meaningful features
+                # SWIN stages output [B, H, W, C] format
                 if isinstance(output, tuple):
                     features = output[0]
                 else:
                     features = output
                 
                 # Global average pooling over spatial dimensions
-                # Shape: [B, H*W, C] -> [B, C]
-                pooled_features = features.mean(dim=1)
+                # Shape: [B, H, W, C] -> [B, C]
+                pooled_features = features.mean(dim=[1, 2])  # Pool over H, W dimensions
                 self.stage_features.append(pooled_features)
             return hook
 
-        # Register hooks on SWIN stages/layers
-        stage_names = ['layers.0', 'layers.1', 'layers.2', 'layers.3']  # SWIN stages
-        
-        for i, stage_idx in enumerate(self.extract_stages):
-            if stage_idx < len(stage_names):
-                # Try to find the stage in the model
-                try:
-                    stage_module = self.model
-                    for attr in stage_names[stage_idx].split('.'):
-                        stage_module = getattr(stage_module, attr)
-                    
-                    stage_module.register_forward_hook(make_hook(stage_idx))
-                    print(f"   ✅ Registered hook on {stage_names[stage_idx]}")
-                except AttributeError:
-                    print(f"   ❌ Could not find stage {stage_names[stage_idx]}")
+        # Register hooks on SWIN stages directly
+        if hasattr(self.model, 'layers') and len(self.model.layers) >= max(self.extract_stages) + 1:
+            for stage_idx in self.extract_stages:
+                stage_module = self.model.layers[stage_idx]
+                stage_module.register_forward_hook(make_hook(stage_idx))
+                print(f"   ✅ Registered hook on stage {stage_idx}")
+        else:
+            print(f"   ❌ Could not find SWIN stages in model")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Clear previous stage features
@@ -436,11 +428,8 @@ class SWINMultiLevelAdapter(nn.Module):
         if not self.stage_features:
             # Fallback: use final output if hooks didn't work
             print("⚠️ Hooks didn't capture features, using final output")
-            if hasattr(output, 'last_hidden_state'):
-                final_features = output.last_hidden_state.mean(dim=1)
-            else:
-                final_features = output.mean(dim=1) if len(output.shape) == 3 else output
-            return final_features
+            # SWIN final output is [B, feature_dim] already
+            return output
         
         # Concatenate all multi-level stage features
         # Each stage: [batch, stage_dim] -> concat -> [batch, sum(stage_dims)]
