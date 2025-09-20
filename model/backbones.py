@@ -23,7 +23,9 @@ def build_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, int]:
         backbone: The backbone network
         feat_dim: Output feature dimension
     """
-    if name.startswith('dinov3'):
+    if name.startswith('dinov3') and 'multilevel' in name:
+        return build_dinov3_multilevel_backbone(name, pretrained)
+    elif name.startswith('dinov3'):
         return build_dinov3_backbone(name, pretrained)
     elif name.startswith('dinov2'):
         return build_dinov2_backbone(name, pretrained)
@@ -132,6 +134,75 @@ class DINOv3BackboneAdapter(nn.Module):
         return last_hidden_state[:, 0]  # CLS token [B, hidden_dim]
 
 
+class DINOv3MultiLevelAdapter(nn.Module):
+    """
+    🧪 RESEARCH: Multi-level feature extraction from DINOv3
+    Inspired by Amur Tiger ReID regional pooling - adapted for Vision Transformers!
+    """
+
+    def __init__(self, model: nn.Module, extract_layers: list = None):
+        super().__init__()
+        self.model = model
+        
+        # Default: Extract from multiple transformer layers for multi-scale features
+        if extract_layers is None:
+            # For 12-layer model: early (3), mid (6), high (9), final (12)
+            self.extract_layers = [2, 5, 8, 11]  # 0-indexed
+        else:
+            self.extract_layers = [l-1 for l in extract_layers]  # Convert to 0-indexed
+            
+        self.intermediate_features = []
+        self._register_hooks()
+        
+        print(f"🧪 Multi-level DINOv3: extracting from layers {[l+1 for l in self.extract_layers]}")
+
+    def _register_hooks(self):
+        """Register forward hooks to capture intermediate layer outputs"""
+        def make_hook(layer_idx):
+            def hook(module, input, output):
+                # Extract CLS token from this layer
+                if isinstance(output, tuple):
+                    hidden_state = output[0]
+                else:
+                    hidden_state = output
+                cls_token = hidden_state[:, 0]  # CLS token
+                self.intermediate_features.append(cls_token)
+            return hook
+
+        # Register hooks on transformer layers
+        if hasattr(self.model, 'encoder') and hasattr(self.model.encoder, 'layer'):
+            layers = self.model.encoder.layer
+            for layer_idx in self.extract_layers:
+                if layer_idx < len(layers):
+                    layers[layer_idx].register_forward_hook(make_hook(layer_idx))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Clear previous intermediate features
+        self.intermediate_features = []
+        
+        # Forward pass - hooks will capture intermediate features
+        outputs = self.model(pixel_values=x)
+        
+        # Get final layer output
+        if isinstance(outputs, tuple):
+            last_hidden_state = outputs[0]
+        else:
+            last_hidden_state = getattr(outputs, "last_hidden_state", None)
+
+        if last_hidden_state is None:
+            raise RuntimeError("DINOv3 model did not return hidden states")
+
+        # Add final layer CLS token
+        final_cls = last_hidden_state[:, 0]
+        self.intermediate_features.append(final_cls)
+        
+        # Concatenate all multi-level features
+        # Shape: [batch_size, num_layers * hidden_dim]
+        multi_level_features = torch.cat(self.intermediate_features, dim=1)
+        
+        return multi_level_features
+
+
 def build_dinov3_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, int]:
     """
     Build a DINOv3 backbone using Hugging Face Transformers.
@@ -193,6 +264,62 @@ def build_dinov3_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module
 
     print(f"🚀 DINOv3 model '{hf_name}' loaded - feature dim: {feat_dim}")
     return wrapped_model, feat_dim
+
+
+def build_dinov3_multilevel_backbone(name: str, pretrained: bool = True, extract_layers: list = None) -> Tuple[nn.Module, int]:
+    """
+    🧪 RESEARCH: Build DINOv3 with multi-level feature extraction
+    Inspired by Amur Tiger ReID - extracts features from intermediate transformer layers!
+    """
+    try:
+        from transformers import AutoConfig, AutoModel
+    except ImportError as exc:
+        raise RuntimeError("DINOv3 backbones require the 'transformers' package") from exc
+
+    official_aliases = {
+        'dinov3_vits16_multilevel': 'facebook/dinov3-vits16-pretrain-lvd1689m',
+        'dinov3_vits16plus_multilevel': 'facebook/dinov3-vits16plus-pretrain-lvd1689m',
+        'dinov3_vitb16_multilevel': 'facebook/dinov3-vitb16-pretrain-lvd1689m',
+        'dinov3_vitl16_multilevel': 'facebook/dinov3-vitl16-pretrain-lvd1689m',
+    }
+
+    # Remove '_multilevel' suffix to get base name
+    base_name = name.replace('_multilevel', '')
+    hf_name = official_aliases.get(name, name.replace('_multilevel', ''))
+    
+    if '/' not in hf_name:
+        valid = ", ".join(sorted(official_aliases))
+        raise ValueError(f"Unknown DINOv3 multi-level backbone '{name}'. Valid options: {valid}")
+
+    print(f"🔧 Building multi-level DINOv3 backbone via Hugging Face: {base_name} ({hf_name})")
+    
+    # Load model and config
+    config = AutoConfig.from_pretrained(hf_name, trust_remote_code=True)
+    model = AutoModel.from_pretrained(hf_name, trust_remote_code=True) if pretrained else AutoModel.from_config(config)
+    
+    # Wrap with multi-level adapter
+    wrapped_model = DINOv3MultiLevelAdapter(model, extract_layers)
+
+    # Determine base feature dimensionality
+    if hasattr(config, 'hidden_size'):
+        base_feat_dim = config.hidden_size
+    elif hasattr(config, 'embed_dim'):
+        base_feat_dim = config.embed_dim
+    elif hasattr(config, 'hidden_sizes') and config.hidden_sizes:
+        base_feat_dim = config.hidden_sizes[-1]
+    else:
+        raise RuntimeError("Unable to infer feature dimension for DINOv3 model")
+    
+    # Multi-level features: concatenated from multiple layers
+    num_layers = len(wrapped_model.extract_layers) + 1  # +1 for final layer
+    multi_level_feat_dim = base_feat_dim * num_layers
+    
+    print(f"🧪 Multi-level DINOv3 model '{hf_name}' loaded")
+    print(f"   Base feature dim: {base_feat_dim}")
+    print(f"   Layers: {num_layers} ({wrapped_model.extract_layers + [config.num_hidden_layers-1]})")
+    print(f"   Final feature dim: {multi_level_feat_dim}")
+    
+    return wrapped_model, multi_level_feat_dim
 
 def build_resnet_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, int]:
     """Build ResNet backbone using timm."""
@@ -267,6 +394,11 @@ BACKBONE_REGISTRY = {
     'dinov3_vitl16': 1024,     # Large - Your current powerful choice
     'dinov3_vith16plus': 1280,
     'dinov3_vit7b16': 4096,
+    
+    # 🧪 RESEARCH: Multi-level DINOv3 (inspired by Amur Tiger ReID regional pooling!)
+    'dinov3_vits16_multilevel': 1920,    # 384 * 5 layers = 1920D 🎯 PERFECT for research!
+    'dinov3_vitb16_multilevel': 3840,    # 768 * 5 layers = 3840D - Rich multi-scale features
+    'dinov3_vitl16_multilevel': 5120,    # 1024 * 5 layers = 5120D - Very high-dim
 
     # DINOv2 variants (your proven choice - still excellent!)
     'dinov2_vits14': 384,   # Small - for quick experiments

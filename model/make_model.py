@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .backbones import build_backbone
-from .layers import BNNeck, ClassificationHead, FeatureEmbedding, l2_normalize, weights_init_kaiming
+from .layers import BNNeck, ClassificationHead, FeatureEmbedding, MultiLevelFusion, l2_normalize, weights_init_kaiming
 
 class DogReIDModel(nn.Module):
     """
@@ -40,9 +40,14 @@ class DogReIDModel(nn.Module):
         
         # Optional feature embedding (like in your Tiger notebook)
         if embed_dim is not None and embed_dim != backbone_feat_dim:
-            self.embedding = FeatureEmbedding(backbone_feat_dim, embed_dim)
+            # 🧪 RESEARCH: Use multi-level fusion for multi-level backbones
+            if 'multilevel' in backbone_name:
+                self.embedding = MultiLevelFusion(backbone_feat_dim, embed_dim)
+                print(f"🧪 Multi-level fusion: {backbone_feat_dim} -> {embed_dim}")
+            else:
+                self.embedding = FeatureEmbedding(backbone_feat_dim, embed_dim)
+                print(f"📊 Added embedding layer: {backbone_feat_dim} -> {embed_dim}")
             feat_dim = embed_dim
-            print(f"📊 Added embedding layer: {backbone_feat_dim} -> {embed_dim}")
         else:
             self.embedding = None
             feat_dim = backbone_feat_dim
