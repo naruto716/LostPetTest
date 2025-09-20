@@ -56,11 +56,19 @@ def do_train(
     
     # Setup model for training
     model.to(device)
-    if torch.cuda.device_count() > 1:
+    
+    # Check if we should skip DataParallel (for models with hooks like SWIN)
+    backbone_name = getattr(cfg, 'BACKBONE', '')
+    skip_dataparallel = 'swin' in backbone_name.lower() and 'multilevel' in backbone_name.lower()
+    
+    if torch.cuda.device_count() > 1 and not skip_dataparallel:
         print(f'🔧 Using {torch.cuda.device_count()} GPUs for training with DataParallel')
         model = nn.DataParallel(model)
     else:
-        print(f'🔧 Using single GPU: {device}')
+        if skip_dataparallel:
+            print(f'🔧 Using single GPU: {device} (DataParallel disabled for multi-level SWIN)')
+        else:
+            print(f'🔧 Using single GPU: {device}')
         
     # Training meters
     loss_meter = AverageMeter()
@@ -104,7 +112,10 @@ def do_train(
             
             with amp.autocast():
                 # Forward pass
-                logits, features = model(img, 'auto')  # Positional args for DataParallel
+                if skip_dataparallel:
+                    logits, features = model(img, return_mode='auto')  # Keyword args for single GPU
+                else:
+                    logits, features = model(img, 'auto')  # Positional args for DataParallel
                 
                 # Compute loss
                 loss, loss_dict = loss_fn(logits, features, target)
@@ -217,9 +228,16 @@ def do_inference(cfg, model, query_loader, gallery_loader):
     logger = logging.getLogger("dogreid.test")
     
     # Setup model for evaluation
-    if torch.cuda.device_count() > 1 and not isinstance(model, nn.DataParallel):
+    # Check if we should skip DataParallel (for models with hooks like SWIN)
+    backbone_name = getattr(cfg, 'BACKBONE', '')
+    skip_dataparallel = 'swin' in backbone_name.lower() and 'multilevel' in backbone_name.lower()
+    
+    if torch.cuda.device_count() > 1 and not isinstance(model, nn.DataParallel) and not skip_dataparallel:
         print(f'Wrapping model with DataParallel for evaluation')
         model = nn.DataParallel(model)
+    elif skip_dataparallel:
+        print(f'Using single GPU for evaluation (DataParallel disabled for multi-level SWIN)')
+        
     model.to(device)
     model.eval()
     
@@ -230,7 +248,10 @@ def do_inference(cfg, model, query_loader, gallery_loader):
     with torch.no_grad():
         for n_iter, (img, pid, camid, _) in enumerate(query_loader):
             img = img.to(device)
-            feat = model(img, 'features')  # L2-normalized features (positional args for DataParallel)
+            if skip_dataparallel:
+                feat = model(img, return_mode='features')  # Keyword args for single GPU  
+            else:
+                feat = model(img, 'features')  # Positional args for DataParallel
             
             query_features.append(feat.cpu())
             query_pids.extend(pid.numpy())
@@ -243,7 +264,10 @@ def do_inference(cfg, model, query_loader, gallery_loader):
     with torch.no_grad():
         for n_iter, (img, pid, camid, _) in enumerate(gallery_loader):
             img = img.to(device)
-            feat = model(img, 'features')  # L2-normalized features (positional args for DataParallel)
+            if skip_dataparallel:
+                feat = model(img, return_mode='features')  # Keyword args for single GPU
+            else:
+                feat = model(img, 'features')  # Positional args for DataParallel
             
             gallery_features.append(feat.cpu())
             gallery_pids.extend(pid.numpy())
