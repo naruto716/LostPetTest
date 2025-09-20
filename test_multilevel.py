@@ -36,30 +36,22 @@ def test_multilevel():
             
         print("✅ Multi-level extraction successful!")
         
-        # Show the multi-level fusion details
-        print("\n🧪 Testing Multi-Level Fusion...")
-        from model.make_model import make_model
-        from config_multilevel import cfg
-        
-        model = make_model(cfg, num_classes=50)
-        if hasattr(model, 'embedding') and hasattr(model.embedding, 'fusion'):
-            fusion_layers = model.embedding.fusion
-            print(f"📊 Fusion architecture:")
-            for i, layer in enumerate(fusion_layers):
-                if hasattr(layer, 'weight'):
-                    print(f"   Layer {i}: {layer}")
-        
     except Exception as e:
         print(f"❌ Error: {e}")
         return False
     
-    # Test integration with model
+    # Test integration with model  
     try:
-        print("\n🔧 Testing integration with ReID model...")
+        print("\n🧪 Testing Multi-Level Fusion...")
         from model.make_model import make_model
         from config_multilevel import cfg
         
-        model = make_model(cfg, num_classes=50)  # Dummy classes
+        # Call make_model with correct parameters
+        model = make_model(
+            backbone_name=cfg.BACKBONE, 
+            num_classes=50, 
+            embed_dim=cfg.EMBED_DIM
+        )
         print(f"✅ Full model created with {cfg.BACKBONE}")
         
         # Test model forward pass
@@ -68,6 +60,14 @@ def test_multilevel():
             print(f"📤 Logits: {logits.shape}, Features: {features.shape}")
             print(f"✅ Expected final feature dim: {cfg.EMBED_DIM}D")
             
+        # Show fusion architecture if available
+        if hasattr(model, 'embedding') and hasattr(model.embedding, 'fusion'):
+            fusion_layers = model.embedding.fusion
+            print(f"📊 Fusion architecture:")
+            for i, layer in enumerate(fusion_layers):
+                if hasattr(layer, 'weight'):
+                    print(f"   Layer {i}: {layer}")
+        
         print("✅ Full pipeline works!")
         
     except Exception as e:

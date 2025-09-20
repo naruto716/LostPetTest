@@ -138,6 +138,7 @@ class DINOv3MultiLevelAdapter(nn.Module):
     """
     🧪 RESEARCH: Multi-level feature extraction from DINOv3
     Inspired by Amur Tiger ReID regional pooling - adapted for Vision Transformers!
+    Uses built-in output_hidden_states instead of hooks - much more reliable!
     """
 
     def __init__(self, model: nn.Module, extract_layers: list = None):
@@ -146,59 +147,39 @@ class DINOv3MultiLevelAdapter(nn.Module):
         
         # Default: Extract from multiple transformer layers for multi-scale features
         if extract_layers is None:
-            # For 12-layer model: early (3), mid (6), high (9), final (12)
-            self.extract_layers = [2, 5, 8, 11]  # 0-indexed
+            # For 12-layer model: early (3), mid (6), high (9), late (12), final (13)
+            self.extract_layers = [2, 5, 8, 11, 12]  # 0-indexed, final layer is 12
         else:
-            self.extract_layers = [l-1 for l in extract_layers]  # Convert to 0-indexed
+            self.extract_layers = extract_layers
             
-        self.intermediate_features = []
-        self._register_hooks()
-        
         print(f"🧪 Multi-level DINOv3: extracting from layers {[l+1 for l in self.extract_layers]}")
 
-    def _register_hooks(self):
-        """Register forward hooks to capture intermediate layer outputs"""
-        def make_hook(layer_idx):
-            def hook(module, input, output):
-                # Extract CLS token from this layer
-                if isinstance(output, tuple):
-                    hidden_state = output[0]
-                else:
-                    hidden_state = output
-                cls_token = hidden_state[:, 0]  # CLS token
-                self.intermediate_features.append(cls_token)
-            return hook
-
-        # Register hooks on transformer layers
-        if hasattr(self.model, 'encoder') and hasattr(self.model.encoder, 'layer'):
-            layers = self.model.encoder.layer
-            for layer_idx in self.extract_layers:
-                if layer_idx < len(layers):
-                    layers[layer_idx].register_forward_hook(make_hook(layer_idx))
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Clear previous intermediate features
-        self.intermediate_features = []
+        # Forward pass with hidden states
+        outputs = self.model(pixel_values=x, output_hidden_states=True)
         
-        # Forward pass - hooks will capture intermediate features
-        outputs = self.model(pixel_values=x)
-        
-        # Get final layer output
-        if isinstance(outputs, tuple):
-            last_hidden_state = outputs[0]
+        # Get hidden states
+        if hasattr(outputs, 'hidden_states'):
+            hidden_states = outputs.hidden_states
         else:
-            last_hidden_state = getattr(outputs, "last_hidden_state", None)
-
-        if last_hidden_state is None:
             raise RuntimeError("DINOv3 model did not return hidden states")
 
-        # Add final layer CLS token
-        final_cls = last_hidden_state[:, 0]
-        self.intermediate_features.append(final_cls)
+        # Extract CLS tokens from selected layers
+        multi_level_cls_tokens = []
+        for layer_idx in self.extract_layers:
+            if layer_idx < len(hidden_states):
+                # Extract CLS token (first token) from this layer
+                cls_token = hidden_states[layer_idx][:, 0]  # Shape: [batch, 384]
+                multi_level_cls_tokens.append(cls_token)
+            else:
+                print(f"⚠️ Warning: Layer {layer_idx} not available (max: {len(hidden_states)-1})")
+        
+        if not multi_level_cls_tokens:
+            raise RuntimeError("No valid layers found for multi-level extraction")
         
         # Concatenate all multi-level features
         # Shape: [batch_size, num_layers * hidden_dim]
-        multi_level_features = torch.cat(self.intermediate_features, dim=1)
+        multi_level_features = torch.cat(multi_level_cls_tokens, dim=1)
         
         return multi_level_features
 
