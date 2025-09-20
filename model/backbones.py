@@ -27,6 +27,8 @@ def build_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, int]:
         return build_dinov3_backbone(name, pretrained)
     elif name.startswith('dinov2'):
         return build_dinov2_backbone(name, pretrained)
+    elif name.startswith('swin'):
+        return build_swin_backbone(name, pretrained)
     elif name.startswith('resnet'):
         return build_resnet_backbone(name, pretrained)
     elif name.startswith('vit'):
@@ -212,13 +214,54 @@ def build_vit_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, i
     print(f"✅ ViT loaded - Feature dim: {feat_dim}")
     return model, feat_dim
 
+def build_swin_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, int]:
+    """
+    Build SWIN Transformer backbone using timm.
+    Perfect for research - good performance but not as dominant as DINOv3-L!
+    """
+    print(f"🔧 Building SWIN backbone: {name}")
+    
+    try:
+        import timm
+    except ImportError:
+        raise ImportError("Please install timm: pip install timm")
+    
+    # Map our names to timm model names
+    swin_model_map = {
+        'swin_large_patch4_window7_224': 'swin_large_patch4_window7_224',
+        'swin_large_patch4_window12_384': 'swin_large_patch4_window12_384', 
+        'swin_base_patch4_window7_224': 'swin_base_patch4_window7_224',
+    }
+    
+    timm_name = swin_model_map.get(name, name)
+    
+    # Create model without classification head
+    model = timm.create_model(
+        timm_name, 
+        pretrained=pretrained, 
+        num_classes=0,  # Remove classification head
+        global_pool=''  # Remove global pooling, keep spatial features
+    )
+    
+    # Get feature dimension
+    if hasattr(model, 'num_features'):
+        feat_dim = model.num_features
+    elif hasattr(model, 'embed_dim'):
+        feat_dim = model.embed_dim
+    else:
+        # Default SWIN-L feature dimension
+        feat_dim = 1536
+    
+    print(f"🚀 SWIN loaded successfully - Feature dim: {feat_dim}")
+    return model, feat_dim
+
 # Registry for easy backbone access (optimized for server hardware)
 BACKBONE_REGISTRY = {
     # DINOv3 variants (Hugging Face canonical names)
     'dinov3_vits16': 384,
     'dinov3_vits16plus': 384,  # hidden size resolved at runtime
-    'dinov3_vitb16': 768,
-    'dinov3_vitl16': 1024,
+    'dinov3_vitb16': 768,      # 🎯 Base - Good for research (less dominant than Large)
+    'dinov3_vitl16': 1024,     # Large - Your current powerful choice
     'dinov3_vith16plus': 1280,
     'dinov3_vit7b16': 4096,
 
@@ -227,6 +270,11 @@ BACKBONE_REGISTRY = {
     'dinov2_vitb14': 768,   # Base - your original success
     'dinov2_vitl14': 1024,  # Large - recommended for your server! 🚀
     'dinov2_vitg14': 1536,  # Giant - if you want max power 💪
+    
+    # SWIN Transformers (great for research - balanced performance) 🎯
+    'swin_base_patch4_window7_224': 1024,     # SWIN-B - Good research baseline
+    'swin_large_patch4_window7_224': 1536,    # SWIN-L - Strong but not dominant
+    'swin_large_patch4_window12_384': 1536,   # SWIN-L 384 - Higher resolution
     
     # Standard backbones (for comparison)
     'resnet50': 2048,
