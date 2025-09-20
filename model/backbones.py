@@ -228,9 +228,11 @@ def build_swin_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, 
     
     # Map our names to timm model names
     swin_model_map = {
+        'swin_tiny_patch4_window7_224': 'swin_tiny_patch4_window7_224',     # 🎯 Tiny - Perfect for research!
+        'swin_small_patch4_window7_224': 'swin_small_patch4_window7_224',   # Small - Good middle ground
+        'swin_base_patch4_window7_224': 'swin_base_patch4_window7_224',     # Base - Stronger
         'swin_large_patch4_window7_224': 'swin_large_patch4_window7_224',
         'swin_large_patch4_window12_384': 'swin_large_patch4_window12_384', 
-        'swin_base_patch4_window7_224': 'swin_base_patch4_window7_224',
     }
     
     timm_name = swin_model_map.get(name, name)
@@ -273,6 +275,8 @@ BACKBONE_REGISTRY = {
     'dinov2_vitg14': 1536,  # Giant - if you want max power 💪
     
     # SWIN Transformers (great for research - balanced performance) 🎯
+    'swin_tiny_patch4_window7_224': 768,      # 🎯 SWIN-Tiny - Perfect research baseline!
+    'swin_small_patch4_window7_224': 768,     # SWIN-Small - Still reasonable
     'swin_base_patch4_window7_224': 1024,     # SWIN-B - Good research baseline
     'swin_large_patch4_window7_224': 1536,    # SWIN-L - Strong but not dominant
     'swin_large_patch4_window12_384': 1536,   # SWIN-L 384 - Higher resolution
