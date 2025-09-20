@@ -49,9 +49,17 @@ def test_research_backbones():
             model.to(device)
             model.eval()
             
-            # Test forward pass
+            # Test forward pass with appropriate input size for each backbone
             batch_size = 8
-            dummy_input = torch.randn(batch_size, 3, 336, 336).to(device)
+            
+            # SWIN models need 224x224, others can handle 336x336
+            if backbone_name.startswith('swin'):
+                input_size = 224
+                print(f"   Using SWIN native size: {input_size}×{input_size}")
+            else:
+                input_size = 336
+            
+            dummy_input = torch.randn(batch_size, 3, input_size, input_size).to(device)
             
             with torch.no_grad():
                 # Test feature extraction
@@ -101,9 +109,11 @@ def test_research_backbones():
     
     print()
     print("🎯 Recommended for Research:")
-    print("   1. dinov3_vitb16 - Good performance but not perfect")
-    print("   2. swin_large_patch4_window7_224 - Different architecture paradigm")
-    print("   3. swin_base_patch4_window7_224 - Even more room for improvement")
+    print("   1. dinov3_vitb16 - Good performance but not perfect (flexible input size)")
+    print("   2. swin_large_patch4_window7_224 - Different architecture paradigm (224×224 only)")
+    print("   3. swin_base_patch4_window7_224 - Even more room for improvement (224×224 only)")
+    print()
+    print("📝 Note: SWIN models require 224×224 input due to window-based attention")
     print()
     print("🏆 Avoid for research (too dominant):")
     print("   - dinov3_vitl16 (your current 100% performance)")

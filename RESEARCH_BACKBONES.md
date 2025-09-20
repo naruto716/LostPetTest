@@ -16,6 +16,8 @@ BACKBONE = 'swin_large_patch4_window7_224'   # 1536D features
 BACKBONE = 'swin_large_patch4_window12_384'  # 1536D features
 ```
 
+**⚠️ Important**: SWIN models require **224×224 input images** due to their window-based attention mechanism. Use `config_swin.py` for proper SWIN training.
+
 ### **DINOv3 Base** (Smaller than your perfect DINOv3-L)
 ```python
 # DINOv3-B: Strong foundation with improvement potential (~85-95% expected)
