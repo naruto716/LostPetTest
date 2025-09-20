@@ -236,11 +236,12 @@ def build_swin_backbone(name: str, pretrained: bool = True) -> Tuple[nn.Module, 
     timm_name = swin_model_map.get(name, name)
     
     # Create model without classification head
+    # Note: SWIN models need specific input sizes (224x224)
     model = timm.create_model(
         timm_name, 
         pretrained=pretrained, 
         num_classes=0,  # Remove classification head
-        global_pool=''  # Remove global pooling, keep spatial features
+        global_pool='avg'  # Use global average pooling for flexible input sizes
     )
     
     # Get feature dimension
