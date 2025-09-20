@@ -292,12 +292,13 @@ def build_dinov3_multilevel_backbone(name: str, pretrained: bool = True, extract
         raise RuntimeError("Unable to infer feature dimension for DINOv3 model")
     
     # Multi-level features: concatenated from multiple layers
-    num_layers = len(wrapped_model.extract_layers) + 1  # +1 for final layer
+    # Note: extract_layers already includes all layers we want (no +1 needed)
+    num_layers = len(wrapped_model.extract_layers)
     multi_level_feat_dim = base_feat_dim * num_layers
     
     print(f"🧪 Multi-level DINOv3 model '{hf_name}' loaded")
     print(f"   Base feature dim: {base_feat_dim}")
-    print(f"   Layers: {num_layers} ({wrapped_model.extract_layers + [config.num_hidden_layers-1]})")
+    print(f"   Layers: {num_layers} ({wrapped_model.extract_layers})")
     print(f"   Final feature dim: {multi_level_feat_dim}")
     
     return wrapped_model, multi_level_feat_dim
