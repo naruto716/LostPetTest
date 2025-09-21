@@ -383,8 +383,10 @@ class SWINMultiLevelAdapter(nn.Module):
         
         # Default: Extract from multiple SWIN stages
         if extract_stages is None:
-            # All 4 SWIN stages for maximum multi-scale diversity
-            self.extract_stages = [0, 1, 2, 3]  # Stage 1, 2, 3, 4
+            # RESEARCH INSIGHT: Skip low-level stages, use only mid+high level
+            # Stage 0-1: Too low-level (edges, textures) - adds noise
+            # Stage 2-3: Mid+high level semantic features - perfect for ReID! 
+            self.extract_stages = [2, 3]  # Stage 3, 4 (mid+high level)
         else:
             self.extract_stages = extract_stages
             
@@ -518,7 +520,7 @@ BACKBONE_REGISTRY = {
     'swin_large_patch4_window12_384': 1536,   # SWIN-L 384 - Higher resolution
     
     # 🧪 RESEARCH: Multi-level SWIN (TRUE hierarchical multi-scale!)
-    'swin_tiny_patch4_window7_224_multilevel': 1440,    # 96+192+384+768 = 1440D 🎯 PERFECT!
+    'swin_tiny_patch4_window7_224_multilevel': 1152,    # 384+768 = 1152D (Stage 2+3, skip low-level noise)
     'swin_small_patch4_window7_224_multilevel': 1440,   # Same architecture as tiny
     'swin_base_patch4_window7_224_multilevel': 1920,    # 128+256+512+1024 = 1920D
     'swin_large_patch4_window7_224_multilevel': 2880,   # 192+384+768+1536 = 2880D

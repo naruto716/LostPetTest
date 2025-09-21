@@ -9,9 +9,9 @@ from config_training import TrainingConfig
 class MultiLevelSWINConfig(TrainingConfig):
     """Multi-level SWIN configuration - TRUE multi-scale like CNNs!"""
     
-    # 🧪 RESEARCH: Multi-level SWIN backbone
-    BACKBONE = 'swin_tiny_patch4_window7_224_multilevel'  # 🎯 96+192+384+768 = 1440D!
-    EMBED_DIM = 768                                       # Project 1440 -> 768 for consistency
+    # 🧪 RESEARCH: Multi-level SWIN backbone (IMPROVED!)
+    BACKBONE = 'swin_tiny_patch4_window7_224_multilevel'  # 🎯 384+768 = 1152D (skip low-level noise!)
+    EMBED_DIM = 768                                       # Project 1152 -> 768 for consistency
     PRETRAINED = True
     BN_NECK = True
     
