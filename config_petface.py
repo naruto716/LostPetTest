@@ -4,13 +4,15 @@ Configuration for PetFace dataset training.
 
 class PetFaceConfig:
     # Dataset paths
-    ROOT_DIR = "/home/sagemaker-user/LostPet/petface"
+    ROOT_DIR = "/home/sagemaker-user/LostPet/petface"  # Where images are stored
     IMAGES_DIR = "dog"  # Subdirectory containing dog ID folders
-    TRAIN_SPLIT = "splits_petface/train.csv"
-    VAL_QUERY_SPLIT = "splits_petface/val_query.csv"
-    VAL_GALLERY_SPLIT = "splits_petface/val_gallery.csv"
-    TEST_QUERY_SPLIT = "splits_petface/test_query.csv"
-    TEST_GALLERY_SPLIT = "splits_petface/test_gallery.csv"
+    
+    # CSV splits (absolute paths - kept in code repo for version control)
+    TRAIN_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface/train.csv"
+    VAL_QUERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface/val_query.csv"
+    VAL_GALLERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface/val_gallery.csv"
+    TEST_QUERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface/test_query.csv"
+    TEST_GALLERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface/test_gallery.csv"
     USE_CAMID = False  # No camera IDs in petface dataset
     
     # Image preprocessing
