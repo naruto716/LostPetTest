@@ -10,7 +10,7 @@ This creates a NEW test set with many more different dogs.
 
 from pathlib import Path
 import random
-import pandas as pd
+import csv
 import argparse
 
 def create_large_test_split(
@@ -45,13 +45,15 @@ def create_large_test_split(
     
     # Load dogs that were used for training (to EXCLUDE them)
     print(f"📂 Loading trained dogs from: {trained_dogs_file}")
+    trained_dog_ids = set()
     if Path(trained_dogs_file).exists():
-        train_df = pd.read_csv(trained_dogs_file)
-        trained_dog_ids = set(train_df['pid'].astype(str).unique())
+        with open(trained_dogs_file, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                trained_dog_ids.add(str(row['pid']))
         print(f"   Trained on: {len(trained_dog_ids)} dogs")
     else:
         print("   ⚠️  Training file not found, using all dogs")
-        trained_dog_ids = set()
     
     # Get UNSEEN dogs (not used for training)
     unseen_dogs = [dog_id for dog_id in all_dog_ids if dog_id not in trained_dog_ids]
@@ -137,21 +139,31 @@ def create_large_test_split(
     test_query_data, test_gallery_data = create_query_gallery(test_dog_ids, test_data)
     
     # Save CSVs
-    test_query_df = pd.DataFrame(test_query_data)
-    test_gallery_df = pd.DataFrame(test_gallery_data)
-    
     test_query_path = output_path / "test_query.csv"
     test_gallery_path = output_path / "test_gallery.csv"
     
-    test_query_df.to_csv(test_query_path, index=False)
-    test_gallery_df.to_csv(test_gallery_path, index=False)
+    # Write query CSV
+    with open(test_query_path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=['img_rel_path', 'pid', 'camid'])
+        writer.writeheader()
+        writer.writerows(test_query_data)
+    
+    # Write gallery CSV
+    with open(test_gallery_path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=['img_rel_path', 'pid', 'camid'])
+        writer.writeheader()
+        writer.writerows(test_gallery_data)
+    
+    # Count unique dogs
+    query_dogs = len(set(record['pid'] for record in test_query_data))
+    gallery_dogs = len(set(record['pid'] for record in test_gallery_data))
     
     # Summary
     print("\n" + "="*80)
     print("✅ Large Test Split Created!")
     print("="*80)
-    print(f"Test Query:   {len(test_query_df):>6} images, {len(test_query_df['pid'].unique()):>6} dogs")
-    print(f"Test Gallery: {len(test_gallery_df):>6} images, {len(test_gallery_df['pid'].unique()):>6} dogs")
+    print(f"Test Query:   {len(test_query_data):>6} images, {query_dogs:>6} dogs")
+    print(f"Test Gallery: {len(test_gallery_data):>6} images, {gallery_dogs:>6} dogs")
     print(f"\nSaved to: {output_dir}/")
     print(f"  - test_query.csv")
     print(f"  - test_gallery.csv")
