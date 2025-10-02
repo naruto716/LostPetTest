@@ -95,14 +95,26 @@ def do_train(
         logger.info("=" * 50)
         torch.cuda.empty_cache()
     
+    logger.info(f"Starting training for {epochs - start_epoch + 1} epochs")
+    logger.info(f"Training set: {len(train_loader.dataset)} images, {len(train_loader)} batches")
+    logger.info(f"Logging every {log_period} iterations")
+    logger.info("About to enter training loop...")
+    
     for epoch in range(start_epoch, epochs + 1):
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Epoch {epoch}/{epochs}")
+        logger.info(f"{'='*60}")
         start_time = time.time()
         loss_meter.reset()
         acc_meter.reset()
         
         # Training phase
         model.train()
+        logger.info("Starting to iterate through training data...")
         for n_iter, (img, pid, camid, _) in enumerate(train_loader):
+            # Log first iteration to confirm training started
+            if n_iter == 0:
+                logger.info(f"✅ First batch loaded! (batch size: {img.shape[0]})")
             optimizer.zero_grad()
             if optimizer_center is not None:
                 optimizer_center.zero_grad()
@@ -157,11 +169,15 @@ def do_train(
         
         end_time = time.time()
         time_per_batch = (end_time - start_time) / (n_iter + 1)
-        logger.info(
-            "Epoch {} done. Time per batch: {:.3f}[s] Speed: {:.1f}[samples/s]".format(
-                epoch, time_per_batch, train_loader.batch_size / time_per_batch
-            )
-        )
+        epoch_time = end_time - start_time
+        
+        logger.info("\n" + "="*60)
+        logger.info(f"✅ Epoch {epoch} Training Complete")
+        logger.info(f"   Time: {epoch_time:.1f}s ({epoch_time/60:.1f} min)")
+        logger.info(f"   Avg Loss: {loss_meter.avg:.4f}")
+        logger.info(f"   Avg Acc: {acc_meter.avg:.3%}")
+        logger.info(f"   Speed: {train_loader.batch_size / time_per_batch:.1f} samples/s")
+        logger.info("="*60)
         
         # Save checkpoint
         if epoch % checkpoint_period == 0:
@@ -179,13 +195,21 @@ def do_train(
         
         # Evaluation
         if epoch % eval_period == 0:
-            logger.info(f"🔍 Evaluating at epoch {epoch}")
+            logger.info("\n" + "🔍"*30)
+            logger.info(f"🔍 VALIDATION - Epoch {epoch}")
+            logger.info("🔍"*30)
+            val_start = time.time()
             cmc, mAP = do_inference(cfg, model, query_loader, gallery_loader)
+            val_time = time.time() - val_start
             
-            logger.info("Validation Results - Epoch: {}".format(epoch))
-            logger.info("mAP: {:.1%}".format(mAP))
-            for r in [1, 5, 10]:
-                logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+            logger.info("\n" + "📊"*30)
+            logger.info(f"📊 Validation Results - Epoch {epoch}")
+            logger.info(f"   mAP: {mAP:.2%}")
+            logger.info(f"   Rank-1:  {cmc[0]:.2%}")
+            logger.info(f"   Rank-5:  {cmc[4]:.2%}")
+            logger.info(f"   Rank-10: {cmc[9]:.2%}")
+            logger.info(f"   Eval time: {val_time:.1f}s")
+            logger.info("📊"*30 + "\n")
             
             # Save best model
             if mAP > best_mAP:
@@ -243,10 +267,16 @@ def do_inference(cfg, model, query_loader, gallery_loader):
     
     # Extract query features
     logger.info("📊 Extracting query features...")
+    logger.info(f"   Query set: {len(query_loader.dataset)} samples, {len(query_loader)} batches")
     query_features, query_pids, query_camids = [], [], []
     
     with torch.no_grad():
         for n_iter, (img, pid, camid, _) in enumerate(query_loader):
+            if n_iter == 0:
+                logger.info(f"   Loading first query batch...")
+            if (n_iter + 1) % 10 == 0:
+                logger.info(f"   Processed {n_iter + 1}/{len(query_loader)} query batches")
+            
             img = img.to(device)
             if skip_dataparallel:
                 feat = model(img, return_mode='features')  # Keyword args for single GPU  
@@ -257,12 +287,20 @@ def do_inference(cfg, model, query_loader, gallery_loader):
             query_pids.extend(pid.numpy())
             query_camids.extend(camid.numpy())
     
+    logger.info(f"✅ Query features extracted: {len(query_features)} batches")
+    
     # Extract gallery features  
     logger.info("📊 Extracting gallery features...")
+    logger.info(f"   Gallery set: {len(gallery_loader.dataset)} samples, {len(gallery_loader)} batches")
     gallery_features, gallery_pids, gallery_camids = [], [], []
     
     with torch.no_grad():
         for n_iter, (img, pid, camid, _) in enumerate(gallery_loader):
+            if n_iter == 0:
+                logger.info(f"   Loading first gallery batch...")
+            if (n_iter + 1) % 20 == 0:
+                logger.info(f"   Processed {n_iter + 1}/{len(gallery_loader)} gallery batches")
+            
             img = img.to(device)
             if skip_dataparallel:
                 feat = model(img, return_mode='features')  # Keyword args for single GPU
@@ -272,6 +310,8 @@ def do_inference(cfg, model, query_loader, gallery_loader):
             gallery_features.append(feat.cpu())
             gallery_pids.extend(pid.numpy())
             gallery_camids.extend(camid.numpy())
+    
+    logger.info(f"✅ Gallery features extracted: {len(gallery_features)} batches")
     
     # Concatenate all features
     qf = torch.cat(query_features, dim=0)

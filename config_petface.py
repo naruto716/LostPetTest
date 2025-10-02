@@ -35,7 +35,7 @@ class PetFaceConfig:
     # P×K Sampling
     IMS_PER_BATCH = 64      # Total batch size (P×K)
     NUM_INSTANCE = 4        # K - instances per identity  
-    NUM_WORKERS = 8         # Multiprocessing workers
+    NUM_WORKERS = 0         # No multiprocessing (avoids hangs, slightly slower)
     TEST_BATCH_SIZE = 128   # Batch size for evaluation
     
     # Model architecture  
@@ -75,7 +75,7 @@ class PetFaceConfig:
     
     # Logging and checkpointing
     OUTPUT_DIR = "./output_petface"
-    LOG_PERIOD = 50         # Log every N iterations
+    LOG_PERIOD = 10         # Log every N iterations (more frequent for subset)
     CHECKPOINT_PERIOD = 10  # Save checkpoint every N epochs
     EVAL_PERIOD = 5         # Evaluate every N epochs
     
