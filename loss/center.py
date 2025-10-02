@@ -46,7 +46,7 @@ class CenterLoss(nn.Module):
         
         # Ensure centers are on the same device as features/labels
         if self.centers.device != features.device:
-            self.centers = self.centers.to(features.device)
+            self.centers.data = self.centers.data.to(features.device)
         
         # Get centers for current batch labels
         centers_batch = self.centers[labels]  # (batch_size, feat_dim)
@@ -73,7 +73,7 @@ class CenterLoss(nn.Module):
         with torch.no_grad():
             # Ensure centers are on the same device
             if self.centers.device != features.device:
-                self.centers = self.centers.to(features.device)
+                self.centers.data = self.centers.data.to(features.device)
             
             for label in labels.unique():
                 # Get features for this class
@@ -85,4 +85,4 @@ class CenterLoss(nn.Module):
                     new_center = class_features.mean(dim=0)
                     
                     # Update with exponential moving average
-                    self.centers[label] = (1 - alpha) * self.centers[label] + alpha * new_center
+                    self.centers.data[label] = (1 - alpha) * self.centers.data[label] + alpha * new_center
