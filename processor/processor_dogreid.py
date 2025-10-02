@@ -51,7 +51,8 @@ def do_train(
     device = "cuda" if torch.cuda.is_available() else "cpu"
     epochs = cfg.MAX_EPOCHS
     
-    logger = logging.getLogger("dogreid.train")
+    # Use root logger to inherit handlers from train script setup
+    logger = logging.getLogger()
     logger.info('🚀 Starting Dog ReID training')
     
     # Setup model for training
@@ -204,6 +205,8 @@ def do_train(
         logger.info(f"   Speed: {train_loader.batch_size / time_per_batch:.1f} samples/s")
         logger.info("="*60)
         
+        print(f"\n>>> EPOCH {epoch} DONE. eval_period={eval_period}, will validate: {epoch % eval_period == 0}")
+        
         # Save checkpoint
         if epoch % checkpoint_period == 0:
             checkpoint = {
@@ -220,11 +223,16 @@ def do_train(
         
         # Evaluation
         if epoch % eval_period == 0:
+            print("\n" + "="*80)
+            print(f"🔍 STARTING VALIDATION AT EPOCH {epoch}")
+            print("="*80)
             logger.info("\n" + "🔍"*30)
             logger.info(f"🔍 VALIDATION - Epoch {epoch}")
             logger.info("🔍"*30)
             val_start = time.time()
+            print("Calling do_inference...")
             cmc, mAP = do_inference(cfg, model, query_loader, gallery_loader)
+            print(f"do_inference completed! mAP: {mAP:.2%}")
             val_time = time.time() - val_start
             
             logger.info("\n" + "📊"*30)
@@ -273,8 +281,11 @@ def do_inference(cfg, model, query_loader, gallery_loader):
         cmc: Cumulative matching characteristics
         mAP: Mean average precision  
     """
+    print(">>> do_inference() called")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    logger = logging.getLogger("dogreid.test")
+    # Use root logger to inherit handlers from train script setup
+    logger = logging.getLogger()
+    print(f">>> Device: {device}, Query batches: {len(query_loader)}, Gallery batches: {len(gallery_loader)}")
     
     # Setup model for evaluation
     # Check if we should skip DataParallel (for models with hooks like SWIN)
