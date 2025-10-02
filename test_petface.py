@@ -3,6 +3,7 @@ Simple test script for PetFace - evaluate best model on test set.
 """
 
 import torch
+import argparse
 from config_petface import cfg
 from datasets.make_dataloader_petface import make_petface_dataloaders
 from model import make_model
@@ -11,6 +12,31 @@ from utils import setup_logger
 import os
 
 def main():
+    parser = argparse.ArgumentParser(description="Test PetFace Model")
+    parser.add_argument(
+        '--test_query',
+        default=None,
+        help='Path to test query CSV (overrides config)'
+    )
+    parser.add_argument(
+        '--test_gallery',
+        default=None,
+        help='Path to test gallery CSV (overrides config)'
+    )
+    parser.add_argument(
+        '--model',
+        default=None,
+        help='Path to model checkpoint (default: output_petface/best_model.pth)'
+    )
+    args = parser.parse_args()
+    
+    # Override config if custom splits provided
+    if args.test_query and args.test_gallery:
+        print(f"📂 Using custom test splits:")
+        print(f"   Query:   {args.test_query}")
+        print(f"   Gallery: {args.test_gallery}")
+        cfg.TEST_QUERY_SPLIT = args.test_query
+        cfg.TEST_GALLERY_SPLIT = args.test_gallery
     # Setup
     logger = setup_logger("petface_test", cfg.OUTPUT_DIR, if_train=False)
     logger.info("🔍 PetFace Test Evaluation")
@@ -35,7 +61,12 @@ def main():
         bn_neck=cfg.BN_NECK
     )
     
-    best_model_path = os.path.join(cfg.OUTPUT_DIR, 'best_model.pth')
+    # Load checkpoint
+    if args.model:
+        best_model_path = args.model
+    else:
+        best_model_path = os.path.join(cfg.OUTPUT_DIR, 'best_model.pth')
+    
     checkpoint = torch.load(best_model_path, map_location='cpu', weights_only=False)
     model.load_state_dict(checkpoint['model'])
     logger.info(f"✅ Loaded from {best_model_path}")
