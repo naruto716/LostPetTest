@@ -74,13 +74,26 @@ for imgs, pids, camids, paths in train_loader:
 
 Edit `config_petface.py`:
 ```python
+# Model
+BACKBONE = 'dinov3_vitl16'  # DINOv3-Large (proven winner)
+EMBED_DIM = 768
+FREEZE_BACKBONE = True      # Frozen backbone approach
+
+# Data
 IMAGE_SIZE = (256, 256)
 IMS_PER_BATCH = 64          # P×K
 NUM_INSTANCE = 4            # K instances per ID
+
+# Augmentation
 ROTATION_DEGREE = 10
 BRIGHTNESS = 0.2
 PADDING = 10
 COORD_SAFE_MODE = False     # Set True for bbox tracking later
+
+# Optimizer
+OPTIMIZER_NAME = 'AdamW'
+BASE_LR = 3e-4
+WEIGHT_DECAY = 0.01
 ```
 
 ### Proper Train/Val/Test Separation

@@ -35,20 +35,20 @@ class PetFaceConfig:
     TEST_BATCH_SIZE = 128   # Batch size for evaluation
     
     # Model architecture  
-    BACKBONE = 'resnet50'   # Can be changed to any supported backbone
-    EMBED_DIM = 2048        # Feature embedding dimension
+    BACKBONE = 'dinov3_vitl16'  # DINOv3-Large (proven winner from comparison)
+    EMBED_DIM = 768             # Feature embedding dimension
     PRETRAINED = True
     BN_NECK = True
-    FREEZE_BACKBONE = False
+    FREEZE_BACKBONE = True      # Freeze backbone (following old dataset approach)
     
-    # Optimizer settings
-    OPTIMIZER_NAME = 'Adam'
-    BASE_LR = 3.5e-4        # Base learning rate
-    WEIGHT_DECAY = 5e-4     # L2 regularization
+    # Optimizer settings (following old dataset DINOv3 config)
+    OPTIMIZER_NAME = 'AdamW'    # Best for transformers
+    BASE_LR = 3e-4              # Base learning rate
+    WEIGHT_DECAY = 0.01         # L2 regularization
     WEIGHT_DECAY_BIAS = 0.0
-    BIAS_LR_FACTOR = 2.0    # Bias learning rate multiplier
+    BIAS_LR_FACTOR = 1.0    # Same LR for bias (like old dataset)
     LARGE_FC_LR = False
-    MOMENTUM = 0.9          # For SGD
+    MOMENTUM = 0.9          # For SGD (if used)
     
     # Learning rate schedule
     MAX_EPOCHS = 120
