@@ -95,9 +95,13 @@ def do_train(
         logger.info("=" * 50)
         torch.cuda.empty_cache()
     
+    print("\n" + "="*80)
+    print("🚀 STARTING TRAINING")
+    print("="*80)
     logger.info(f"Starting training for {epochs - start_epoch + 1} epochs")
     logger.info(f"Training set: {len(train_loader.dataset)} images, {len(train_loader)} batches")
     logger.info(f"Logging every {log_period} iterations")
+    print("About to enter training loop...")
     logger.info("About to enter training loop...")
     
     for epoch in range(start_epoch, epochs + 1):
@@ -110,17 +114,24 @@ def do_train(
         
         # Training phase
         model.train()
+        print(f"[Epoch {epoch}] Starting to iterate through training data...")
         logger.info("Starting to iterate through training data...")
+        
         for n_iter, (img, pid, camid, _) in enumerate(train_loader):
             # Log first iteration to confirm training started
             if n_iter == 0:
+                print(f"✅ First batch loaded! (batch size: {img.shape[0]}, unique PIDs: {len(set(pid.tolist()))})")
                 logger.info(f"✅ First batch loaded! (batch size: {img.shape[0]})")
+            
             optimizer.zero_grad()
             if optimizer_center is not None:
                 optimizer_center.zero_grad()
                 
             img = img.to(device)
             target = pid.to(device)
+            
+            if n_iter == 0:
+                print("   Running forward pass...")
             
             with amp.autocast():
                 # Forward pass
@@ -129,10 +140,20 @@ def do_train(
                 else:
                     logits, features = model(img, 'auto')  # Positional args for DataParallel
                 
+                if n_iter == 0:
+                    print(f"   Forward pass done! logits: {logits.shape}, features: {features.shape}")
+                    print("   Computing loss...")
+                
                 # Compute loss
                 loss, loss_dict = loss_fn(logits, features, target)
+                
+                if n_iter == 0:
+                    print(f"   Loss computed! loss: {loss.item():.4f}")
             
             # Backward pass
+            if n_iter == 0:
+                print("   Running backward pass...")
+            
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -154,6 +175,10 @@ def do_train(
             acc_meter.update(acc.item(), 1)
             
             torch.cuda.synchronize()
+            
+            if n_iter == 0:
+                print(f"✅ First iteration complete! Loss: {loss.item():.4f}, Acc: {acc.item():.3%}")
+            
             if (n_iter + 1) % log_period == 0:
                 logger.info(
                     "Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}".format(
