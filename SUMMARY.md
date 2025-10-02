@@ -26,13 +26,40 @@
 
 ### Usage
 
+**Training:**
+```bash
+# Basic training (uses validation set for checkpointing)
+python train_petface.py
+
+# With options
+python train_petface.py --epochs 120 --output_dir ./output_petface
+
+# Resume from checkpoint
+python train_petface.py --resume ./output_petface/checkpoint_epoch_50.pth
+
+# Training + final test evaluation
+python train_petface.py --final_test
+```
+
+**Evaluation Only:**
+```bash
+# Evaluate on validation set
+python train_petface.py --eval_only --eval_split val --resume ./output_petface/best_model.pth
+
+# Evaluate on test set
+python train_petface.py --eval_only --eval_split test --resume ./output_petface/best_model.pth
+```
+
+**Programmatic Usage:**
 ```python
 from config_petface import cfg
 from datasets.make_dataloader_petface import make_petface_dataloaders
 
-# Load data
-(train_loader, val_query, val_gallery, 
- test_query, test_gallery, num_classes) = make_petface_dataloaders(cfg)
+# Load data (proper train/val/test separation)
+(train_loader, 
+ val_query_loader, val_gallery_loader,    # For validation during training
+ test_query_loader, test_gallery_loader,  # For final evaluation
+ num_classes) = make_petface_dataloaders(cfg)
 
 # Training loop
 for imgs, pids, camids, paths in train_loader:
@@ -56,6 +83,29 @@ PADDING = 10
 COORD_SAFE_MODE = False     # Set True for bbox tracking later
 ```
 
+### Proper Train/Val/Test Separation
+
+**Key Principle:** Test set should NEVER be used during training!
+
+**Our Approach:**
+1. **Training (70% of dogs)**
+   - Used with PK sampling for learning
+   
+2. **Validation (10% of dogs)**
+   - Split into query/gallery
+   - Used DURING training for model selection and checkpointing
+   - Best model selected based on val mAP
+   
+3. **Test (20% of dogs)**
+   - Split into query/gallery
+   - Used ONLY for final evaluation after training
+   - Represents true unseen performance
+
+**Why this matters:**
+- Prevents data leakage
+- Honest performance estimates
+- Standard machine learning practice
+
 ### Splits Generated
 
 Run on SageMaker:
@@ -64,12 +114,12 @@ cd /home/sagemaker-user/LostPet
 python3 create_petface_splits.py
 ```
 
-Creates:
-- `splits_petface/train.csv` - 70% of dogs
-- `splits_petface/val_query.csv` - 10% of dogs (query)
-- `splits_petface/val_gallery.csv` - 10% of dogs (gallery)
-- `splits_petface/test_query.csv` - 20% of dogs (query)
-- `splits_petface/test_gallery.csv` - 20% of dogs (gallery)
+Creates (7:1:2 ratio by dog ID):
+- `splits_petface/train.csv` - All images from 70% of dogs
+- `splits_petface/val_query.csv` - First image of each dog (10% of dogs)
+- `splits_petface/val_gallery.csv` - Remaining images (10% of dogs)
+- `splits_petface/test_query.csv` - First image of each dog (20% of dogs)
+- `splits_petface/test_gallery.csv` - Remaining images (20% of dogs)
 
 ## Future: Regional Pooling with Bboxes
 
