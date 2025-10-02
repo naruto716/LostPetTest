@@ -235,6 +235,17 @@ def do_train(
             print(f"do_inference completed! mAP: {mAP:.2%}")
             val_time = time.time() - val_start
             
+            # Print results (guaranteed to show)
+            print("\n" + "="*80)
+            print(f"📊 VALIDATION RESULTS - Epoch {epoch}")
+            print("="*80)
+            print(f"   mAP:      {mAP:.2%}")
+            print(f"   Rank-1:   {cmc[0]:.2%}")
+            print(f"   Rank-5:   {cmc[4]:.2%}")
+            print(f"   Rank-10:  {cmc[9]:.2%}")
+            print(f"   Eval time: {val_time:.1f}s")
+            print("="*80 + "\n")
+            
             logger.info("\n" + "📊"*30)
             logger.info(f"📊 Validation Results - Epoch {epoch}")
             logger.info(f"   mAP: {mAP:.2%}")
