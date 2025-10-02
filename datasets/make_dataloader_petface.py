@@ -149,13 +149,19 @@ def make_petface_dataloaders(cfg=None):
     )
 
     # Create identity-balanced sampler for training
+    print(f"Creating PK sampler for {train_set.num_classes} identities...")
+    import time
+    sampler_start = time.time()
     sampler = RandomIdentitySampler(
         data_source=train_set,
         batch_size=cfg.IMS_PER_BATCH,
         num_instances=cfg.NUM_INSTANCE
     )
+    print(f"✅ Sampler created in {time.time() - sampler_start:.1f}s")
 
     # Create dataloaders
+    print("Creating DataLoaders...")
+    loader_start = time.time()
     train_loader = DataLoader(
         train_set,
         batch_size=cfg.IMS_PER_BATCH,
@@ -201,6 +207,8 @@ def make_petface_dataloaders(cfg=None):
         pin_memory=True,
         collate_fn=ReIDCollator()
     )
+    
+    print(f"✅ All DataLoaders created in {time.time() - loader_start:.1f}s")
 
     return (
         train_loader, 

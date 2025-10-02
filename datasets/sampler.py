@@ -23,8 +23,15 @@ class RandomIdentitySampler(Sampler):
         self.batch_size = batch_size
         self.num_instances = num_instances  # K
         
-        # Build index mapping: PID -> list of sample indices  
-        self.index_pid = [pid for _, pid, _, _ in data_source]
+        # Build index mapping: PID -> list of sample indices
+        # Access PIDs directly from dataset (avoid loading images!)
+        if hasattr(data_source, 'pids'):
+            # Fast path: dataset has PIDs as attribute
+            self.index_pid = data_source.pids
+        else:
+            # Fallback: iterate through dataset (slow, loads images)
+            self.index_pid = [pid for _, pid, _, _ in data_source]
+        
         self.pid_index = defaultdict(list)
         
         for index, pid in enumerate(self.index_pid):

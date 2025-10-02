@@ -122,17 +122,36 @@ WEIGHT_DECAY = 0.01
 ### Splits Generated
 
 Run on SageMaker:
+
+**Option 1: Subset for Quick Experimentation (Recommended)**
 ```bash
-cd /home/sagemaker-user/LostPet
-python3 create_petface_splits.py
+cd /home/sagemaker-user/LostPet/LostPetTest
+python3 create_petface_splits.py --subset 2000  # ~2K training images
+# Or: python3 create_petface_splits.py --subset 5000  # ~5K training images
 ```
 
-Creates (7:1:2 ratio by dog ID):
-- `splits_petface/train.csv` - All images from 70% of dogs
-- `splits_petface/val_query.csv` - First image of each dog (10% of dogs)
-- `splits_petface/val_gallery.csv` - Remaining images (10% of dogs)
-- `splits_petface/test_query.csv` - First image of each dog (20% of dogs)
-- `splits_petface/test_gallery.csv` - Remaining images (20% of dogs)
+Creates in `splits_petface_subset/`:
+- Fast training (~5-10 min/epoch)
+- Good for validating pipeline
+- Default in config
+
+**Option 2: Full Dataset**
+```bash
+cd /home/sagemaker-user/LostPet/LostPetTest
+python3 create_petface_splits.py  # Full 192K images
+```
+
+Creates in `splits_petface/`:
+- All 71K dogs, 274K images
+- Slow training (~25 min/epoch)
+- Change config to use this
+
+**Split Structure (7:1:2 ratio by dog ID):**
+- `train.csv` - All images from 70% of dogs
+- `val_query.csv` - First image of each dog (10% of dogs)
+- `val_gallery.csv` - Remaining images (10% of dogs)
+- `test_query.csv` - First image of each dog (20% of dogs)
+- `test_gallery.csv` - Remaining images (20% of dogs)
 
 ## Future: Regional Pooling with Bboxes
 

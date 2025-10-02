@@ -104,6 +104,9 @@ def main():
     
     # Create data loaders with proper train/val/test separation
     logger.info("📊 Creating data loaders...")
+    import time
+    start_time = time.time()
+    
     (train_loader, 
      val_query_loader, 
      val_gallery_loader,
@@ -111,6 +114,7 @@ def main():
      test_gallery_loader, 
      num_classes) = make_petface_dataloaders(cfg)
     
+    logger.info(f"✅ Data loaders created in {time.time() - start_time:.1f}s")
     logger.info(f"   Training samples: {len(train_loader.dataset)}")
     logger.info(f"   Val query samples: {len(val_query_loader.dataset)}")
     logger.info(f"   Val gallery samples: {len(val_gallery_loader.dataset)}")
@@ -120,6 +124,7 @@ def main():
     
     # Create model
     logger.info("🏗️  Creating model...")
+    model_start = time.time()
     model = make_model(
         backbone_name=cfg.BACKBONE,
         num_classes=num_classes,
@@ -127,9 +132,11 @@ def main():
         pretrained=cfg.PRETRAINED,
         bn_neck=cfg.BN_NECK
     )
+    logger.info(f"✅ Model created in {time.time() - model_start:.1f}s")
     
     # Create loss function
     logger.info("🎯 Creating loss function...")
+    loss_start = time.time()
     loss_fn = make_loss(
         num_classes=num_classes,
         feat_dim=model.get_feature_dim(),
@@ -140,6 +147,7 @@ def main():
         use_center_loss=cfg.USE_CENTER_LOSS,
         center_loss_weight=cfg.CENTER_LOSS_WEIGHT
     )
+    logger.info(f"✅ Loss function created in {time.time() - loss_start:.1f}s")
     
     # Get center loss criterion
     center_criterion = None
@@ -148,15 +156,18 @@ def main():
     
     # Create optimizer
     logger.info("⚙️  Creating optimizer...")
+    opt_start = time.time()
     optimizer, optimizer_center = make_optimizer(
         cfg, 
         model, 
         center_criterion, 
         freeze_backbone=cfg.FREEZE_BACKBONE
     )
+    logger.info(f"✅ Optimizer created in {time.time() - opt_start:.1f}s")
     
     # Create scheduler
     logger.info("📈 Creating scheduler...")
+    sched_start = time.time()
     scheduler = WarmupMultiStepLR(
         optimizer,
         milestones=cfg.STEPS,
@@ -165,6 +176,7 @@ def main():
         warmup_iters=cfg.WARMUP_ITERS,
         warmup_method=cfg.WARMUP_METHOD
     )
+    logger.info(f"✅ Scheduler created in {time.time() - sched_start:.1f}s")
     
     start_epoch = 1
     best_mAP = 0.0
@@ -202,6 +214,7 @@ def main():
     logger.info("🚀 Starting training loop...")
     logger.info("   Using VALIDATION set for model selection during training")
     logger.info("   Test set will be used only for final evaluation")
+    train_start = time.time()
     
     do_train(
         cfg=cfg,
