@@ -28,7 +28,7 @@ class PetFaceConfig:
     BRIGHTNESS = 0.2           # ColorJitter brightness
     CONTRAST = 0.2             # ColorJitter contrast
     SATURATION = 0.2           # ColorJitter saturation
-    HUE = 0.2                  # ColorJitter hue
+    HUE = 0                    # ColorJitter hue (disabled - PIL HSV conversion too slow)
     
     COORD_SAFE_MODE = False    # Set to True for coordinate-based regional pooling
     

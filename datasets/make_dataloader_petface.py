@@ -31,7 +31,7 @@ def build_transforms(cfg, is_train=True, coord_safe=False):
                 brightness=getattr(cfg, 'BRIGHTNESS', 0.2),
                 contrast=getattr(cfg, 'CONTRAST', 0.2),
                 saturation=getattr(cfg, 'SATURATION', 0.2),
-                hue=getattr(cfg, 'HUE', 0.2)
+                hue=0  # Disabled: PIL HSV conversion is very slow
             ),
             transforms.Pad(cfg.PADDING) if cfg.PADDING > 0 else None,
             transforms.RandomCrop(size) if cfg.PADDING > 0 else None,
