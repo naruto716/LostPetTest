@@ -87,6 +87,32 @@ def create_petface_splits(
         
         return data
     
+    # Helper function to create query/gallery splits
+    def create_query_gallery(dog_id_list, all_data):
+        """
+        Create query and gallery splits from a set of dog IDs.
+        Query: first image of each dog
+        Gallery: remaining images (or same image if only 1 image per dog)
+        """
+        query = []
+        gallery = []
+        
+        for dog_id in dog_id_list:
+            # Get all images for this dog
+            dog_images = [d for d in all_data if d['pid'] == dog_id]
+            
+            if len(dog_images) > 0:
+                # First image goes to query
+                query.append(dog_images[0])
+                # Rest go to gallery
+                gallery.extend(dog_images[1:])
+                
+                # If only one image, also add to gallery for matching
+                if len(dog_images) == 1:
+                    gallery.append(dog_images[0])
+        
+        return query, gallery
+    
     # Collect images for each split
     print("\nCollecting images...")
     train_data = collect_images(train_ids)
@@ -109,35 +135,24 @@ def create_petface_splits(
     
     print("\nWriting CSV files...")
     write_csv(train_data, 'train.csv')
-    write_csv(val_data, 'val.csv')
-    write_csv(test_data, 'test.csv')
     
-    # Also create query/gallery splits from test set (for ReID evaluation)
-    # Typically: 1 image per dog in query, rest in gallery
-    print("\nCreating query/gallery splits from test set...")
+    # Create query/gallery splits for VALIDATION
+    print("\nCreating VALIDATION query/gallery splits...")
+    val_query, val_gallery = create_query_gallery(val_ids, val_data)
+    print(f"  Val Query:   {len(val_query)} images ({len(val_ids)} dogs)")
+    print(f"  Val Gallery: {len(val_gallery)} images")
     
-    query_data = []
-    gallery_data = []
+    write_csv(val_query, 'val_query.csv')
+    write_csv(val_gallery, 'val_gallery.csv')
     
-    for dog_id in test_ids:
-        # Get all images for this dog in test set
-        dog_images = [d for d in test_data if d['pid'] == dog_id]
-        
-        if len(dog_images) > 0:
-            # First image goes to query
-            query_data.append(dog_images[0])
-            # Rest go to gallery
-            gallery_data.extend(dog_images[1:])
-            
-            # If only one image, also add to gallery for matching
-            if len(dog_images) == 1:
-                gallery_data.append(dog_images[0])
+    # Create query/gallery splits for TEST
+    print("\nCreating TEST query/gallery splits...")
+    test_query, test_gallery = create_query_gallery(test_ids, test_data)
+    print(f"  Test Query:   {len(test_query)} images ({len(test_ids)} dogs)")
+    print(f"  Test Gallery: {len(test_gallery)} images")
     
-    print(f"  Query:   {len(query_data)} images")
-    print(f"  Gallery: {len(gallery_data)} images")
-    
-    write_csv(query_data, 'query.csv')
-    write_csv(gallery_data, 'gallery.csv')
+    write_csv(test_query, 'test_query.csv')
+    write_csv(test_gallery, 'test_gallery.csv')
     
     print("\n✓ Done! Split files created in:", output_dir)
 
