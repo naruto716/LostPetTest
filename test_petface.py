@@ -35,8 +35,12 @@ def main():
         print(f"📂 Using custom test splits:")
         print(f"   Query:   {args.test_query}")
         print(f"   Gallery: {args.test_gallery}")
-        cfg.TEST_QUERY_SPLIT = args.test_query
-        cfg.TEST_GALLERY_SPLIT = args.test_gallery
+        # Convert to absolute paths if they're relative
+        import os
+        test_query = args.test_query if os.path.isabs(args.test_query) else os.path.abspath(args.test_query)
+        test_gallery = args.test_gallery if os.path.isabs(args.test_gallery) else os.path.abspath(args.test_gallery)
+        cfg.TEST_QUERY_SPLIT = test_query
+        cfg.TEST_GALLERY_SPLIT = test_gallery
     # Setup
     logger = setup_logger("petface_test", cfg.OUTPUT_DIR, if_train=False)
     logger.info("🔍 PetFace Test Evaluation")
