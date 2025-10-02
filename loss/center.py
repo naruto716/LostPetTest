@@ -44,6 +44,10 @@ class CenterLoss(nn.Module):
         """
         batch_size = features.size(0)
         
+        # Ensure centers are on the same device as features/labels
+        if self.centers.device != features.device:
+            self.centers = self.centers.to(features.device)
+        
         # Get centers for current batch labels
         centers_batch = self.centers[labels]  # (batch_size, feat_dim)
         
@@ -67,6 +71,10 @@ class CenterLoss(nn.Module):
             alpha: Update rate (0.0 = no update, 1.0 = replace completely)
         """
         with torch.no_grad():
+            # Ensure centers are on the same device
+            if self.centers.device != features.device:
+                self.centers = self.centers.to(features.device)
+            
             for label in labels.unique():
                 # Get features for this class
                 mask = (labels == label)
