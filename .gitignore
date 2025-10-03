@@ -11,3 +11,14 @@ wheels/
 CLIP-ReID
 .env
 CVWC2019-Amur-Tiger-Re-ID
+
+
+#petface 
+petface*
+benchmark 
+dataset 
+
+experiments/
+outputs/
+configs/
+splits_petface_custom/
