@@ -22,9 +22,8 @@ def is_valid_image(landmarks):
     
     region_bboxes = landmarks['region_bboxes']
     
-    # Required regions
-    required_regions = ['left_eye', 'right_eye', 'nose', 'mouth', 'forehead']
-    optional_regions = ['left_ear', 'right_ear']  # Ears often occluded
+    # All regions are required
+    required_regions = ['left_eye', 'right_eye', 'nose', 'mouth', 'forehead', 'left_ear', 'right_ear']
     
     # Check for missing required regions
     for region in required_regions:
@@ -48,13 +47,9 @@ def is_valid_image(landmarks):
         
         if region in required_regions and area < min_size:
             issues.append(f"Tiny {region}: {area}px² (min: {min_size})")
-        elif region in optional_regions and area > 0 and area < min_size:
-            # For optional regions, only flag if present but too small
-            issues.append(f"Tiny {region}: {area}px²")
     
-    # Valid if no issues with required regions
-    required_issues = [iss for iss in issues if any(req in iss for req in required_regions)]
-    is_valid = len(required_issues) == 0
+    # Valid only if no issues at all
+    is_valid = len(issues) == 0
     
     return is_valid, issues
 
