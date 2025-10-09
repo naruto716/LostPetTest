@@ -268,77 +268,15 @@ def visualize_if_available(img_path, landmarks, output_path):
         return False
 
 
-def test_mock_setup():
-    """Test with mock data when PetFace images aren't available."""
-    print("Testing with mock PetFace data...")
+if __name__ == "__main__":
+    # Run on sagemaker with PetFace data
+    print("Testing PetFace Bounding Boxes on First 100 Images")
     print("="*60)
     
-    # Mock landmark data from the sample you provided
-    mock_landmark = {
-        "image_width": 224,
-        "image_height": 224,
-        "region_bboxes": {
-            "left_eye": {"x_min": 147, "y_min": 88, "x_max": 169, "y_max": 92, "width": 22, "height": 4},
-            "right_eye": {"x_min": 56, "y_min": 89, "x_max": 73, "y_max": 102, "width": 17, "height": 13},
-            "nose": {"x_min": 81, "y_min": 135, "x_max": 141, "y_max": 188, "width": 60, "height": 53},
-            "mouth": {"x_min": 49, "y_min": 104, "x_max": 178, "y_max": 207, "width": 129, "height": 103},
-            "left_ear": {"x_min": 183, "y_min": 16, "x_max": 222, "y_max": 169, "width": 39, "height": 153},
-            "right_ear": {"x_min": 3, "y_min": 4, "x_max": 48, "y_max": 200, "width": 45, "height": 196},
-            "forehead": {"x_min": 30, "y_min": 14, "x_max": 201, "y_max": 97, "width": 171, "height": 83}
-        }
-    }
-    
-    # Analyze the sample
-    print("\nSample Landmark Analysis:")
-    print("-"*50)
-    for region, bbox in mock_landmark['region_bboxes'].items():
-        area = bbox['width'] * bbox['height']
-        coverage = (area / (224 * 224)) * 100
-        print(f"{region:12} {bbox['width']:3d}×{bbox['height']:3d} = {area:5d}px² ({coverage:4.1f}%)")
-    
-    print("\nObservations:")
-    print("- Eye regions are very small (4-13px height)")
-    print("- Mouth is the largest region (26.5% coverage)")
-    print("- Total coverage is high (~91%) - regions likely overlap")
-    
-
-if __name__ == "__main__":
-    import sys
-    
-    # Check if user has PetFace images
-    petface_exists = Path("images/011103").exists()
-    
-    if not petface_exists:
-        print("⚠️  PetFace images not found!")
-        print("\nYour current images directory contains different data.")
-        print("The PetFace dataset expects structure like:")
-        print("  images/")
-        print("    011103/")
-        print("      00.png")
-        print("      01.png")
-        print("      ...")
-        print("\nOptions:")
-        print("1. Download PetFace images from:")
-        print("   https://sites.google.com/view/petface/")
-        print("\n2. Or copy from sagemaker if available:")
-        print("   scp -r user@sagemaker:/path/to/PetFace/dog ./petface_images")
-        print("\n" + "-"*60)
-        
-        # Test with mock data instead
-        test_mock_setup()
-        
-        print("\n" + "="*60)
-        print("COMPLETE SETUP NEEDED:")
-        print("="*60)
-        print("1. PetFace images: ./petface_images/<dog_id>/<photo_id>.png")
-        print("2. Landmark JSONs: ./landmarks/<dog_id>_<photo_id>.json")
-        print("3. Update paths in the script and run again")
-    else:
-        # Test with actual PetFace data
-        print("Testing PetFace image loading...")
-        test_petface_bboxes(
-            csv_path="splits_petface/train.csv",
-            image_dir="/home/sagemaker-user/LostPet/PetFace/dog",  # Sagemaker path
-            landmarks_dir="/home/sagemaker-user/LostPet/dogface_landmark_estimation_hrcnn/petface_landmarks_json_all",
-            num_images=100
-        )
+    test_petface_bboxes(
+        csv_path="splits_petface/train.csv",
+        image_dir="/home/sagemaker-user/LostPet/PetFace/dog",
+        landmarks_dir="/home/sagemaker-user/LostPet/dogface_landmark_estimation_hrcnn/petface_landmarks_json_all",
+        num_images=100,
+        output_dir="bbox_visualizations"
+    )
