@@ -65,8 +65,13 @@ class RegionalCollator:
             region_tensors = [regions[region_name] for regions in regions_list]
             regions_batch[region_name] = torch.stack(region_tensors, 0)
         
-        # PIDs and camids
-        pids_tensor = torch.tensor(pids, dtype=torch.long)
+        # PIDs - handle both int (training with relabel) and str (eval without relabel)
+        if isinstance(pids[0], int):
+            pids_tensor = torch.tensor(pids, dtype=torch.long)
+        else:
+            # For eval, PIDs are strings - convert to int
+            pids_tensor = torch.tensor([int(pid) for pid in pids], dtype=torch.long)
+        
         camids_tensor = torch.tensor(camids, dtype=torch.long)
         
         return (
