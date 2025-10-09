@@ -168,22 +168,35 @@ def do_train(
                 time_per_batch = elapsed_time / (n_iter + 1)
                 eta = time_per_batch * (len(train_loader) - n_iter - 1)
                 
-                logger.info(f"Epoch[{epoch}] Iteration[{n_iter + 1}/{len(train_loader)}] "
-                          f"Loss: {loss_meter.avg:.4f}, Acc: {acc_meter.avg:.3f}, "
-                          f"Base Lr: {scheduler.get_lr()[0]:.2e}, "
+                # Enhanced logging with individual loss components
+                log_msg = (f"Epoch[{epoch}] Iter[{n_iter + 1}/{len(train_loader)}] "
+                          f"Loss: {loss_meter.avg:.4f} "
+                          f"(ID: {loss_dict['id_loss']:.3f}, "
+                          f"Tri: {loss_dict['triplet_loss']:.3f}), "
+                          f"Acc: {acc_meter.avg:.3f}, "
+                          f"LR: {scheduler.get_lr()[0]:.2e}, "
                           f"ETA: {timedelta(seconds=int(eta))}")
+                
+                logger.info(log_msg)
+                print(log_msg)  # Also print to console
         
-        # End of epoch
+        # End of epoch - detailed summary
         epoch_time = time.time() - start_time
         time_per_batch = epoch_time / len(train_loader)
         
-        logger.info("\n" + "="*60)
-        logger.info(f"✅ Epoch {epoch} Training Complete")
-        logger.info(f"   Time: {epoch_time:.1f}s ({epoch_time/60:.1f} min)")
-        logger.info(f"   Avg Loss: {loss_meter.avg:.4f}")
-        logger.info(f"   Avg Acc: {acc_meter.avg:.3%}")
-        logger.info(f"   Speed: {train_loader.batch_size / time_per_batch:.1f} samples/s")
-        logger.info("="*60)
+        epoch_summary = f"""
+{'='*80}
+✅ EPOCH {epoch}/{epochs} TRAINING COMPLETE
+{'='*80}
+Time:           {epoch_time:.1f}s ({epoch_time/60:.1f} min)
+Avg Loss:       {loss_meter.avg:.4f}
+Avg Accuracy:   {acc_meter.avg:.3%}
+Learning Rate:  {scheduler.get_lr()[0]:.2e}
+Throughput:     {train_loader.batch_size / time_per_batch:.1f} samples/s
+{'='*80}
+"""
+        print(epoch_summary)
+        logger.info(epoch_summary)
         
         # Save checkpoint
         if epoch % checkpoint_period == 0:
@@ -212,25 +225,22 @@ def do_train(
             cmc, mAP = do_inference(cfg, model, query_loader, gallery_loader)
             val_time = time.time() - val_start
             
-            # Print results
-            print("\n" + "="*80)
-            print(f"📊 VALIDATION RESULTS - Epoch {epoch}")
-            print("="*80)
-            print(f"   mAP:      {mAP:.2%}")
-            print(f"   Rank-1:   {cmc[0]:.2%}")
-            print(f"   Rank-5:   {cmc[4]:.2%}")
-            print(f"   Rank-10:  {cmc[9]:.2%}")
-            print(f"   Eval time: {val_time:.1f}s")
-            print("="*80 + "\n")
-            
-            logger.info("\n" + "📊"*30)
-            logger.info(f"📊 Validation Results - Epoch {epoch}")
-            logger.info(f"   mAP: {mAP:.2%}")
-            logger.info(f"   Rank-1: {cmc[0]:.2%}")
-            logger.info(f"   Rank-5: {cmc[4]:.2%}")
-            logger.info(f"   Rank-10: {cmc[9]:.2%}")
-            logger.info(f"   Time: {val_time:.1f}s")
-            logger.info("📊"*30)
+            # Print detailed results
+            val_summary = f"""
+{'='*80}
+📊 VALIDATION RESULTS - Epoch {epoch}
+{'='*80}
+mAP:            {mAP:.2%}
+Rank-1:         {cmc[0]:.2%}
+Rank-5:         {cmc[4]:.2%}
+Rank-10:        {cmc[9]:.2%}
+Rank-20:        {cmc[19]:.2%}
+Eval Time:      {val_time:.1f}s
+Best mAP:       {max(mAP, best_mAP):.2%} {'🏆 NEW BEST!' if mAP > best_mAP else ''}
+{'='*80}
+"""
+            print(val_summary)
+            logger.info(val_summary)
             
             # Save best model
             if mAP > best_mAP:
