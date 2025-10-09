@@ -56,10 +56,23 @@ def test_training_step():
         relabel=True
     )
     
+    # Use PK sampler for proper triplet loss
+    # P identities × K images per identity = batch_size
+    from datasets.sampler import RandomIdentitySampler
+    
+    batch_size = 16  # 4 identities × 4 images
+    num_instances = 4  # K = 4 images per identity
+    
+    sampler = RandomIdentitySampler(
+        data_source=dataset,
+        batch_size=batch_size,
+        num_instances=num_instances
+    )
+    
     dataloader = torch.utils.data.DataLoader(
         dataset,
-        batch_size=4,
-        shuffle=False,
+        batch_size=batch_size,
+        sampler=sampler,
         num_workers=0,
         collate_fn=RegionalCollator()
     )
