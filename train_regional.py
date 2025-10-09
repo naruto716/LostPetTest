@@ -19,7 +19,7 @@ from datasets.make_dataloader_regional import make_regional_dataloaders
 from model import make_regional_model
 from loss import make_loss
 from solver import make_optimizer, WarmupMultiStepLR
-from processor.processor_regional import do_train_regional, do_inference_regional
+from processor.processor_regional import do_train, do_inference
 from utils import setup_logger
 
 
@@ -166,7 +166,7 @@ def main():
     # Evaluation only mode
     if args.eval_only:
         logger.info("🔍 Evaluation only mode")
-        cmc, mAP = do_inference_regional(cfg, model, val_query_loader, val_gallery_loader)
+        cmc, mAP = do_inference(cfg, model, val_query_loader, val_gallery_loader)
         logger.info("Evaluation Results:")
         logger.info("mAP: {:.1%}".format(mAP))
         for r in [1, 5, 10]:
@@ -175,7 +175,7 @@ def main():
     
     # Start training
     logger.info("🚀 Starting training loop...")
-    do_train_regional(
+    do_train(
         cfg=cfg,
         model=model,
         center_criterion=center_criterion,
