@@ -39,8 +39,9 @@ class RegionalConfig(TrainingConfig):
     
     # Batch size - adjust based on GPU memory
     # Regional model uses 8x forward passes per batch (1 global + 7 regions)
-    IMS_PER_BATCH = 64           # 4 identities × 16 images
-    NUM_INSTANCE = 16            # K = 16 images per identity
+    # Dataset has ~3 images per dog, so K must be small
+    IMS_PER_BATCH = 32           # 8 identities × 4 images
+    NUM_INSTANCE = 4             # K = 4 images per identity (realistic for ~3 avg)
     TEST_BATCH_SIZE = 64
     
     # Loss weights
