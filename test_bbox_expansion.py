@@ -14,7 +14,7 @@ EXPANSION_RATIOS = {
     'left_eye': 0.8,
     'right_eye': 0.8,
     'nose': 0.15,
-    'mouth': 0.18,
+    'mouth': 0.1,
     'left_ear': 0.3,
     'right_ear': 0.3,
     'forehead': 0.2
