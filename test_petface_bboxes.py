@@ -86,13 +86,37 @@ def test_petface_bboxes(
                                 'area': bbox['width'] * bbox['height']
                             })
                 
-                # Visualize first 10 images
-                if i < 10:
-                    visualize_path = f"bbox_vis_{dog_id}_{photo_id}.png"
-                    if visualize_if_available(img_path, landmarks, visualize_path):
-                        print(f" → Saved visualization: {visualize_path}")
-                    else:
-                        print(" → Visualization skipped (PIL not available)")
+                # Visualize ALL 100 images
+                visualize_filename = f"bbox_vis_{dog_id}_{photo_id}.png"
+                visualize_path = os.path.join(output_dir, visualize_filename)
+                visualize_if_available(img_path, landmarks, visualize_path)
+                
+                # Check for issues
+                issues = []
+                if 'region_bboxes' in landmarks:
+                    # Check for missing regions
+                    expected = ['left_eye', 'right_eye', 'nose', 'mouth', 'left_ear', 'right_ear', 'forehead']
+                    present = set(landmarks['region_bboxes'].keys())
+                    missing = [r for r in expected if r not in present]
+                    if missing:
+                        issues.append(f"MISSING: {', '.join(missing)}")
+                    
+                    # Check for unreasonably small detections
+                    for region, bbox in landmarks['region_bboxes'].items():
+                        area = bbox['width'] * bbox['height']
+                        # Minimum reasonable sizes
+                        min_sizes = {
+                            'left_eye': 20, 'right_eye': 20,
+                            'nose': 100,
+                            'mouth': 500,
+                            'left_ear': 200, 'right_ear': 200,
+                            'forehead': 500
+                        }
+                        if area < min_sizes.get(region, 0):
+                            issues.append(f"TINY {region}: {bbox['width']}×{bbox['height']}={area}px²")
+                
+                if issues:
+                    print(f" ⚠️  {' | '.join(issues)}")
                 
             else:
                 print(" ✗ No landmarks")
