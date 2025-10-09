@@ -13,7 +13,6 @@ import torch
 import torch.nn as nn
 from torch.cuda import amp
 from utils.meter import AverageMeter
-from utils.metrics import R1_mAP_eval
 
 def do_train(
     cfg,
@@ -346,14 +345,23 @@ def do_inference(cfg, model, query_loader, gallery_loader):
     
     logger.info(f"   ✅ Gallery features extracted: {gallery_features.shape}")
     
-    # Compute metrics (same as baseline)
-    print("Computing distance matrix and ranking...")
-    logger.info("📊 Computing metrics...")
+    # Log statistics
+    logger.info(f"Query: {len(query_features)} samples, {len(set(query_pids))} identities")
+    logger.info(f"Gallery: {len(gallery_features)} samples, {len(set(gallery_pids))} identities")
     
-    evaluator = R1_mAP_eval(len(query_pids), max_rank=50, feat_norm='yes')
-    evaluator.reset()
-    evaluator.update((query_features, query_pids, query_camids, gallery_features, gallery_pids, gallery_camids))
-    cmc, mAP = evaluator.compute()
+    # Check PID overlap
+    query_set = set(query_pids)
+    gallery_set = set(gallery_pids)
+    overlap = query_set.intersection(gallery_set)
+    logger.info(f"PID overlap: {len(overlap)} identities out of {len(query_set)} query IDs")
+    
+    # Compute metrics using eval_func (same as baseline)
+    print("Computing distance matrix and ranking...")
+    logger.info("🧮 Computing distance matrix...")
+    
+    from utils.metrics import euclidean_distance, eval_func
+    distmat = euclidean_distance(query_features, gallery_features)
+    cmc, mAP = eval_func(distmat, query_pids, gallery_pids, query_camids, gallery_camids, max_rank=50)
     
     logger.info("✅ Evaluation complete")
     
