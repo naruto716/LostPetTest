@@ -11,12 +11,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 # Region-specific expansion ratios (adjust these after inspection)
 EXPANSION_RATIOS = {
-    'left_eye': 0.4,
-    'right_eye': 0.4,
+    'left_eye': 0.8,
+    'right_eye': 0.8,
     'nose': 0.15,
     'mouth': 0.18,
-    'left_ear': 0.2,
-    'right_ear': 0.2,
+    'left_ear': 0.3,
+    'right_ear': 0.3,
     'forehead': 0.2
 }
 
