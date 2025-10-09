@@ -22,29 +22,29 @@ class DogFaceRegionalDataset(Dataset):
     """
     Dataset for Dog Face ReID with regional feature extraction.
     
-    Loads face images and extracts 7 regions based on landmarks:
+    Loads face images and extracts 7 regions based on landmarks with bbox expansion.
     - left_eye, right_eye, nose, mouth, left_ear, right_ear, forehead
     """
     
     def __init__(
         self, 
-        csv_path: str,
+        valid_json_path: str,
         image_dir: str,
         landmarks_dir: str,
         transform_global: Optional[T.Compose] = None,
         transform_regional: Optional[T.Compose] = None,
         is_train: bool = True,
-        region_size: Tuple[int, int] = (64, 64)
+        region_size: Tuple[int, int] = (224, 224)
     ):
         """
         Args:
-            csv_path: Path to train/val/test CSV file
+            valid_json_path: Path to filtered valid images JSON (from filter script)
             image_dir: Root directory for images
             landmarks_dir: Directory containing landmark JSONs (REQUIRED)
             transform_global: Transform for full face image
             transform_regional: Transform for regional images
             is_train: Whether this is training data
-            region_size: Target size for regional images
+            region_size: Target size for regional images (global image size)
         """
         self.image_dir = Path(image_dir)
         self.landmarks_dir = Path(landmarks_dir)
@@ -55,21 +55,45 @@ class DogFaceRegionalDataset(Dataset):
         if not self.landmarks_dir.exists():
             raise ValueError(f"Landmarks directory does not exist: {self.landmarks_dir}")
         
-        # Load CSV data
-        self.df = pd.read_csv(csv_path)
+        # Load filtered valid images JSON
+        with open(valid_json_path, 'r') as f:
+            data = json.load(f)
+        
+        # Flatten to list of (dog_id, photo_id, pid_label) tuples
+        self.samples = []
+        dog_ids = sorted(data['dog_images'].keys())
+        
+        # Create pid mapping (dog_id -> integer label)
+        self.dog_id_to_pid = {dog_id: i for i, dog_id in enumerate(dog_ids)}
+        self.num_pids = len(dog_ids)
+        
+        for dog_id in dog_ids:
+            photo_ids = data['dog_images'][dog_id]
+            pid_label = self.dog_id_to_pid[dog_id]
+            for photo_id in photo_ids:
+                self.samples.append((dog_id, photo_id, pid_label))
         
         # Define regions
         self.regions = ['left_eye', 'right_eye', 'nose', 'mouth', 
                        'left_ear', 'right_ear', 'forehead']
         
+        # Bbox expansion ratios (manually tuned)
+        self.expansion_ratios = {
+            'left_eye': 0.8,
+            'right_eye': 0.8,
+            'nose': 0.15,
+            'mouth': 0.1,
+            'left_ear': 0.3,
+            'right_ear': 0.3,
+            'forehead': 0.2
+        }
+        
         # Transforms
         self.transform_global = transform_global or self._default_transform()
-        self.transform_regional = transform_regional or self._default_transform(self.region_size)
+        self.transform_regional = transform_regional or self._default_transform((64, 64))
         
+        logger.info(f"Loaded {len(self.samples)} valid images from {self.num_pids} dogs")
         logger.info(f"Using landmarks from: {self.landmarks_dir}")
-        
-        # Validate that we have landmarks for at least some samples
-        self._validate_landmarks_availability()
     
     def _default_transform(self, size=(224, 224)):
         """Default transform for images."""
@@ -88,42 +112,42 @@ class DogFaceRegionalDataset(Dataset):
                 T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
     
-    def _validate_landmarks_availability(self):
-        """Check if we have landmarks for at least some samples."""
-        # Check first 10 samples
-        samples_to_check = min(10, len(self.df))
-        found_landmarks = 0
-        
-        for i in range(samples_to_check):
-            row = self.df.iloc[i]
-            parts = row['img_rel_path'].split('/')
-            dog_id = parts[0]
-            photo_id = parts[1].split('.')[0]
-            
-            if self._check_landmark_exists(dog_id, photo_id):
-                found_landmarks += 1
-        
-        if found_landmarks == 0:
-            raise ValueError(
-                f"No landmark JSONs found for first {samples_to_check} samples. "
-                f"Please ensure landmark JSONs are in {self.landmarks_dir} "
-                f"with format: <dog_id>_<photo_id>.json"
-            )
-        
-        logger.info(f"Found landmarks for {found_landmarks}/{samples_to_check} checked samples")
-    
-    def _check_landmark_exists(self, dog_id: str, photo_id: str) -> bool:
-        """Check if landmark JSON exists for given image."""
-        json_path = self.landmarks_dir / f"{dog_id}_{photo_id}.json"
-        if not json_path.exists():
-            # Try without leading zeros
-            dog_id_int = str(int(dog_id))
-            photo_id_int = str(int(photo_id))
-            json_path = self.landmarks_dir / f"{dog_id_int}_{photo_id_int}.json"
-        return json_path.exists()
-    
     def __len__(self):
-        return len(self.df)
+        return len(self.samples)
+    
+    def expand_bbox(self, bbox: Dict, expansion_ratio: float, img_width: int, img_height: int) -> Dict:
+        """
+        Expand bbox by percentage while staying within image bounds.
+        
+        Args:
+            bbox: Original bbox with x_min, y_min, x_max, y_max, width, height
+            expansion_ratio: Percentage to expand (e.g., 0.2 = 20%)
+            img_width, img_height: Image dimensions
+        
+        Returns:
+            Expanded bbox dict
+        """
+        width = bbox['width']
+        height = bbox['height']
+        
+        # Calculate expansion in pixels (split evenly on both sides)
+        expand_w = int(width * expansion_ratio / 2)
+        expand_h = int(height * expansion_ratio / 2)
+        
+        # Expand bbox
+        x_min = max(0, bbox['x_min'] - expand_w)
+        y_min = max(0, bbox['y_min'] - expand_h)
+        x_max = min(img_width, bbox['x_max'] + expand_w)
+        y_max = min(img_height, bbox['y_max'] + expand_h)
+        
+        return {
+            'x_min': x_min,
+            'y_min': y_min,
+            'x_max': x_max,
+            'y_max': y_max,
+            'width': x_max - x_min,
+            'height': y_max - y_min
+        }
     
     def _load_landmarks(self, dog_id: str, photo_id: str) -> Dict:
         """Load landmarks JSON for an image. Raises exception if not found."""
@@ -145,25 +169,32 @@ class DogFaceRegionalDataset(Dataset):
     
     
     def _extract_regions_from_landmarks(self, image: Image.Image, landmarks: Dict) -> Dict:
-        """Extract regions using actual landmarks."""
+        """Extract regions using actual landmarks with bbox expansion."""
         regions = {}
         region_bboxes = landmarks.get('region_bboxes', {})
         
         if not region_bboxes:
             raise ValueError("No region_bboxes found in landmark JSON")
         
+        img_width, img_height = image.size
         missing_regions = []
+        
         for region_name in self.regions:
             if region_name in region_bboxes:
-                bbox = region_bboxes[region_name]
-                x_min = max(0, bbox['x_min'])
-                y_min = max(0, bbox['y_min'])
-                x_max = min(image.width, bbox['x_max'])
-                y_max = min(image.height, bbox['y_max'])
+                orig_bbox = region_bboxes[region_name]
+                
+                # Expand bbox
+                expansion_ratio = self.expansion_ratios.get(region_name, 0.2)
+                expanded_bbox = self.expand_bbox(orig_bbox, expansion_ratio, img_width, img_height)
+                
+                x_min = expanded_bbox['x_min']
+                y_min = expanded_bbox['y_min']
+                x_max = expanded_bbox['x_max']
+                y_max = expanded_bbox['y_max']
                 
                 # Validate bbox
                 if x_max <= x_min or y_max <= y_min:
-                    raise ValueError(f"Invalid bbox for {region_name}: {bbox}")
+                    raise ValueError(f"Invalid bbox for {region_name}: {expanded_bbox}")
                 
                 region_img = image.crop((x_min, y_min, x_max, y_max))
                 regions[region_name] = {
@@ -180,22 +211,20 @@ class DogFaceRegionalDataset(Dataset):
     
     def __getitem__(self, idx):
         """Get image and regional features."""
-        row = self.df.iloc[idx]
-        img_path = self.image_dir / row['img_rel_path']
-        pid = row['pid']
-        camid = row['camid']
+        dog_id, photo_id, pid = self.samples[idx]
+        
+        # Construct image path
+        img_path = self.image_dir / dog_id / f"{photo_id}.png"
         
         # Load full image
         image = Image.open(img_path).convert('RGB')
         
-        # Extract dog_id and photo_id from path
-        # Format: 011103/00.png -> dog_id=011103, photo_id=00
-        parts = row['img_rel_path'].split('/')
-        dog_id = parts[0]
-        photo_id = parts[1].split('.')[0]
+        # Load landmarks
+        landmark_path = self.landmarks_dir / f"{dog_id}_{photo_id}.json"
+        with open(landmark_path, 'r') as f:
+            landmarks = json.load(f)
         
-        # Get regions from landmarks (required)
-        landmarks = self._load_landmarks(dog_id, photo_id)
+        # Extract regions with expansion
         regions = self._extract_regions_from_landmarks(image, landmarks)
         
         # Apply transforms
@@ -218,12 +247,12 @@ class DogFaceRegionalDataset(Dataset):
                 'image': image_tensor,
                 'regions': region_tensors,
                 'pid': pid,
-                'camid': camid,
+                'camid': 0,  # Not used for PetFace
                 'img_path': str(img_path)
             }
         else:
             # For evaluation, return in format expected by inference
-            return image_tensor, pid, camid, str(img_path)
+            return image_tensor, region_tensors, pid, str(img_path)
     
     def visualize_sample(self, idx: int, save_path: Optional[str] = None):
         """Visualize a sample with its regions."""
@@ -231,16 +260,16 @@ class DogFaceRegionalDataset(Dataset):
         import matplotlib.patches as patches
         
         # Get raw data without transforms
-        row = self.df.iloc[idx]
-        img_path = self.image_dir / row['img_rel_path']
+        dog_id, photo_id, pid = self.samples[idx]
+        img_path = self.image_dir / dog_id / f"{photo_id}.png"
         image = Image.open(img_path).convert('RGB')
         
-        # Get regions
-        parts = row['img_rel_path'].split('/')
-        dog_id = parts[0]
-        photo_id = parts[1].split('.')[0]
+        # Load landmarks
+        landmark_path = self.landmarks_dir / f"{dog_id}_{photo_id}.json"
+        with open(landmark_path, 'r') as f:
+            landmarks = json.load(f)
         
-        landmarks = self._load_landmarks(dog_id, photo_id)
+        # Get regions with expansion
         regions = self._extract_regions_from_landmarks(image, landmarks)
         
         # Create visualization
@@ -281,11 +310,11 @@ class DogFaceRegionalDataset(Dataset):
 
 
 # Convenience functions for creating datasets
-def make_regional_dataloader(csv_path, image_dir, landmarks_dir, batch_size=32, 
+def make_regional_dataloader(valid_json_path, image_dir, landmarks_dir, batch_size=32, 
                            is_train=True, num_workers=4):
     """Create a regional dataloader."""
     dataset = DogFaceRegionalDataset(
-        csv_path=csv_path,
+        valid_json_path=valid_json_path,
         image_dir=image_dir,
         landmarks_dir=landmarks_dir,
         is_train=is_train
