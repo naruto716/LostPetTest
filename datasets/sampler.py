@@ -100,7 +100,26 @@ class RandomIdentitySampler(Sampler):
 
     def __len__(self):
         """
-        Return the total number of samples that will be generated.
-        This is approximately the number of complete batches we can form.
+        Return the total number of samples that will be generated.        
+        The sampler creates batches by:
+        1. For each identity, create K-sized mini-batches
+        2. Sample P identities and take one mini-batch from each
+        3. Continue until not enough identities left
+        
+        Total batches = (total mini-batches across all identities) / P
         """
-        return len(self.index_pid)
+        # Count total mini-batches across all identities
+        total_mini_batches = 0
+        for pid in self.pids:
+            num_images = len(self.pid_index[pid])
+            # Each identity contributes floor(num_images / K) mini-batches
+            num_mini_batches = num_images // self.num_instances
+            if num_mini_batches > 0:
+                total_mini_batches += num_mini_batches
+        
+        # Total batches = mini-batches / P
+        # (Each final batch needs P mini-batches, one from each selected identity)
+        num_batches = total_mini_batches // self.num_pids_per_batch
+        
+        # Return total samples
+        return num_batches * self.batch_size
