@@ -56,7 +56,16 @@ def do_train(
     logger.info('🚀 Starting Dog ReID training')
     
     # Setup model for training
+    logger.info(f'📦 Moving model to {device}...')
+    if device == "cuda":
+        logger.info(f'   GPU: {torch.cuda.get_device_name(0)}')
+        logger.info(f'   GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB')
+    
+    import time
+    start_time = time.time()
     model.to(device)
+    elapsed = time.time() - start_time
+    logger.info(f'✅ Model moved to {device} in {elapsed:.1f}s')
     
     # Check if we should skip DataParallel (for models with hooks like SWIN)
     backbone_name = getattr(cfg, 'BACKBONE', '')
