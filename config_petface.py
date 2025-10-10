@@ -8,13 +8,13 @@ class PetFaceConfig:
     IMAGES_DIR = "dog"  # Subdirectory containing dog ID folders
     
     # CSV splits (absolute paths - kept in code repo for version control)
-    # NOTE: Using subset by default for quick experimentation (~2K training images)
-    # To use full dataset, change splits_petface_subset -> splits_petface
-    TRAIN_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_subset/train.csv"
-    VAL_QUERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_subset/val_query.csv"
-    VAL_GALLERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_subset/val_gallery.csv"
-    TEST_QUERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_subset/test_query.csv"
-    TEST_GALLERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_subset/test_gallery.csv"
+    # NOTE: Using 30k dog dataset (splits_petface_valid)
+    # To use subset for testing, change splits_petface_valid -> splits_petface_subset
+    TRAIN_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_valid/train.csv"
+    VAL_QUERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_valid/val_query.csv"
+    VAL_GALLERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_valid/val_gallery.csv"
+    TEST_QUERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_valid/test_query.csv"
+    TEST_GALLERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_valid/test_gallery.csv"
     USE_CAMID = False  # No camera IDs in petface dataset
     
     # Image preprocessing
@@ -39,11 +39,11 @@ class PetFaceConfig:
     TEST_BATCH_SIZE = 128   # Batch size for evaluation
     
     # Model architecture  
-    BACKBONE = 'dinov3_vitl16'  # DINOv3-Large (proven winner from comparison)
-    EMBED_DIM = 768             # Feature embedding dimension
+    BACKBONE = 'dinov3_vitb16'  # DINOv3-Base (baseline for 30k dogs)
+    EMBED_DIM = 768             # Feature embedding dimension (native vitb size)
     PRETRAINED = True
     BN_NECK = True
-    FREEZE_BACKBONE = True      # Freeze backbone (following old dataset approach)
+    FREEZE_BACKBONE = False     # Fine-tune for better performance
     
     # Optimizer settings (following old dataset DINOv3 config)
     OPTIMIZER_NAME = 'AdamW'    # Best for transformers
@@ -74,10 +74,10 @@ class PetFaceConfig:
     CENTER_LR = 0.5
     
     # Logging and checkpointing
-    OUTPUT_DIR = "./output_petface"
-    LOG_PERIOD = 10         # Log every N iterations (more frequent for subset)
+    OUTPUT_DIR = "./outputs/petface_30k_dinov3b_baseline"
+    LOG_PERIOD = 50         # Log every N iterations
     CHECKPOINT_PERIOD = 10  # Save checkpoint every N epochs
-    EVAL_PERIOD = 5         # Evaluate every N epochs
+    EVAL_PERIOD = 10        # Evaluate every N epochs
     
     # Device
     DEVICE = "cuda"
