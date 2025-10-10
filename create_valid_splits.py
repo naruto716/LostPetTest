@@ -16,7 +16,7 @@ def create_valid_splits(
     train_ratio=0.7,
     val_ratio=0.1,
     test_ratio=0.2,
-    num_dogs=30000,
+    num_dogs=6000,
     seed=42
 ):
     """
