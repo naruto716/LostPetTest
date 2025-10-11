@@ -87,13 +87,17 @@ def main():
                 if not attr.startswith('_'):
                     setattr(self, attr, getattr(base_cfg, attr))
             
-            # Override test splits
-            self.TEST_QUERY_SPLIT = args.test_query_csv
-            self.TEST_GALLERY_SPLIT = args.test_gallery_csv
+            # Override test splits with absolute paths
+            self.TEST_QUERY_SPLIT = os.path.abspath(args.test_query_csv)
+            self.TEST_GALLERY_SPLIT = os.path.abspath(args.test_gallery_csv)
             self.TEST_BATCH_SIZE = args.batch_size
             self.NUM_WORKERS = args.num_workers
     
     cfg = InferenceConfig()
+    
+    logger.info(f"Test splits configured:")
+    logger.info(f"  Query: {cfg.TEST_QUERY_SPLIT}")
+    logger.info(f"  Gallery: {cfg.TEST_GALLERY_SPLIT}")
     
     # Set seed
     set_seed(42)
