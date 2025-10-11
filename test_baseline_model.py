@@ -95,10 +95,6 @@ def main():
     
     cfg = InferenceConfig()
     
-    logger.info(f"Test splits configured:")
-    logger.info(f"  Query: {cfg.TEST_QUERY_SPLIT}")
-    logger.info(f"  Gallery: {cfg.TEST_GALLERY_SPLIT}")
-    
     # Set seed
     set_seed(42)
     
@@ -113,6 +109,9 @@ def main():
     logger.info(f"Test query CSV: {args.test_query_csv}")
     logger.info(f"Test gallery CSV: {args.test_gallery_csv}")
     logger.info(f"Output directory: {args.output_dir}")
+    logger.info(f"Test splits configured:")
+    logger.info(f"  Query: {cfg.TEST_QUERY_SPLIT}")
+    logger.info(f"  Gallery: {cfg.TEST_GALLERY_SPLIT}")
     
     # Print configuration
     print("\n" + "="*80)
