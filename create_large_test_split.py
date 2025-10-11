@@ -1,204 +1,168 @@
 """
-Create a large test split from PetFace for generalization testing.
-
-Purpose: Test a model trained on ~784 dogs on a much larger set of UNSEEN dogs
-to evaluate how well it generalizes to many more identities.
-
-The trained model was trained on subset dogs (train split).
-This creates a NEW test set with many more different dogs.
+Create a large test set (query/gallery) from filtered valid images JSON.
+For testing model on a large number of dogs without training.
 """
 
-from pathlib import Path
-import random
+import json
 import csv
-import argparse
+import random
+import os
+from pathlib import Path
+
 
 def create_large_test_split(
-    data_root="/home/sagemaker-user/LostPet/petface/dog",
-    output_dir="./splits_petface_large_test",
-    num_test_dogs=10000,  # Target number of test dogs
-    trained_dogs_file="./splits_petface_subset/train.csv",  # Dogs already used for training
+    valid_json_path="petface_valid_images_with_ears.json",
+    output_dir="./splits_petface_test_10k",
+    num_dogs=10000,
     seed=42
 ):
     """
-    Create a large test set with many unseen dog identities.
+    Create test query/gallery splits from filtered valid images.
     
     Args:
-        data_root: Root directory containing dog ID folders
-        output_dir: Where to save the new test split CSVs
-        num_test_dogs: How many NEW dogs to include in test set
-        trained_dogs_file: CSV of dogs used for training (we exclude these)
-        seed: Random seed
+        valid_json_path: Path to filtered valid images JSON
+        output_dir: Directory to save CSV split files
+        num_dogs: Number of dogs to use for test set (default: 10000)
+        seed: Random seed for reproducibility
     """
-    print("\n" + "="*80)
-    print("🧪 Creating Large Test Split for Generalization Testing")
-    print("="*80)
-    
     random.seed(seed)
-    data_path = Path(data_root)
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
     
-    # Get all available dog IDs
-    all_dog_ids = sorted([d.name for d in data_path.iterdir() if d.is_dir()])
-    print(f"📊 Total dogs in dataset: {len(all_dog_ids)}")
+    # Load filtered valid images
+    print("Loading filtered valid images...")
+    with open(valid_json_path, 'r') as f:
+        data = json.load(f)
     
-    # Load dogs that were used for training (to EXCLUDE them)
-    print(f"📂 Loading trained dogs from: {trained_dogs_file}")
-    trained_dog_ids = set()
-    if Path(trained_dogs_file).exists():
-        with open(trained_dogs_file, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                trained_dog_ids.add(str(row['pid']))
-        print(f"   Trained on: {len(trained_dog_ids)} dogs")
+    dog_images = data['dog_images']
+    all_dog_ids = sorted(dog_images.keys())
+    
+    print(f"Total valid dog IDs available: {len(all_dog_ids)}")
+    print(f"Total valid images: {data['metadata']['final_valid_images']}")
+    
+    # Select dogs for test set
+    if num_dogs is not None and num_dogs < len(all_dog_ids):
+        print(f"\nSelecting {num_dogs} dogs for test set")
+        random.seed(seed)
+        test_dog_ids = random.sample(all_dog_ids, num_dogs)
     else:
-        print("   ⚠️  Training file not found, using all dogs")
+        test_dog_ids = all_dog_ids
+        print(f"\nUsing all {len(test_dog_ids)} dogs for test set")
     
-    # Get UNSEEN dogs (not used for training)
-    unseen_dogs = [dog_id for dog_id in all_dog_ids if dog_id not in trained_dog_ids]
-    print(f"✅ Available unseen dogs: {len(unseen_dogs)}")
+    # Shuffle for good measure
+    random.shuffle(test_dog_ids)
     
-    # Sample test dogs
-    if len(unseen_dogs) < num_test_dogs:
-        print(f"⚠️  Only {len(unseen_dogs)} unseen dogs available, using all")
-        test_dog_ids = unseen_dogs
-    else:
-        test_dog_ids = random.sample(unseen_dogs, num_test_dogs)
+    print(f"Test set: {len(test_dog_ids)} dogs")
     
-    print(f"🎯 Selected {len(test_dog_ids)} dogs for large test set")
+    # Create output directory
+    os.makedirs(output_dir, exist_ok=True)
     
-    # Collect images for test dogs
-    def collect_images(dog_id_list):
-        data = []
-        dogs_with_images = 0
-        total_images = 0
+    # Helper function to create query/gallery splits
+    def create_query_gallery(dog_id_list):
+        """
+        Create query and gallery splits.
+        Query: first image of each dog
+        Gallery: all images (including query for single-image dogs)
+        """
+        query = []
+        gallery = []
         
-        for i, dog_id in enumerate(dog_id_list):
-            if (i + 1) % 1000 == 0:
-                print(f"   Processing: {i+1}/{len(dog_id_list)} dogs...")
+        for dog_id in dog_id_list:
+            photo_ids = sorted(dog_images[dog_id])
             
-            dog_folder = data_path / dog_id
+            # First image as query
+            query_photo = photo_ids[0]
+            query.append({
+                'img_rel_path': f"{dog_id}/{query_photo}.png",
+                'pid': dog_id,
+                'camid': 0
+            })
             
-            # Find all image files
-            image_files = []
-            for ext in ['*.png', '*.jpg', '*.jpeg', '*.PNG', '*.JPG', '*.JPEG']:
-                image_files.extend(dog_folder.glob(ext))
-            
-            image_files = sorted(image_files, key=lambda x: x.name)
-            
-            if len(image_files) == 0:
-                continue
-            
-            dogs_with_images += 1
-            total_images += len(image_files)
-            
-            # Add all images
-            for img_file in image_files:
-                img_rel_path = f"{dog_id}/{img_file.name}"
-                data.append({
-                    'img_rel_path': img_rel_path,
+            # All images in gallery (includes query for consistency)
+            for photo_id in photo_ids:
+                gallery.append({
+                    'img_rel_path': f"{dog_id}/{photo_id}.png",
                     'pid': dog_id,
                     'camid': 0
                 })
         
-        print(f"   ✅ Found {total_images} images from {dogs_with_images} dogs")
-        return data
+        return query, gallery
     
-    # Create query/gallery split
-    def create_query_gallery(dog_id_list, all_data):
-        """Split into query (first image per dog) and gallery (rest)"""
-        query_data = []
-        gallery_data = []
-        
-        # Group by dog ID
-        dog_to_images = {}
-        for record in all_data:
-            pid = record['pid']
-            if pid not in dog_to_images:
-                dog_to_images[pid] = []
-            dog_to_images[pid].append(record)
-        
-        for dog_id in dog_id_list:
-            if dog_id not in dog_to_images:
-                continue
-            
-            images = dog_to_images[dog_id]
-            if len(images) > 0:
-                query_data.append(images[0])  # First image = query
-                gallery_data.extend(images[1:])  # Rest = gallery
-        
-        return query_data, gallery_data
+    # Create test query/gallery
+    print("\nCreating test splits...")
+    test_query, test_gallery = create_query_gallery(test_dog_ids)
+    print(f"  Test query: {len(test_query)} images ({len(test_dog_ids)} dogs)")
+    print(f"  Test gallery: {len(test_gallery)} images")
     
-    # Collect test images
-    print("\n📸 Collecting test images...")
-    test_data = collect_images(test_dog_ids)
+    # Write CSV files
+    def write_csv(filename, data):
+        filepath = os.path.join(output_dir, filename)
+        with open(filepath, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=['img_rel_path', 'pid', 'camid'])
+            writer.writeheader()
+            writer.writerows(data)
+        print(f"  Saved: {filepath}")
     
-    # Create query/gallery split
-    print("\n🔀 Creating query/gallery split...")
-    test_query_data, test_gallery_data = create_query_gallery(test_dog_ids, test_data)
+    print("\nWriting CSV files...")
+    write_csv('test_query.csv', test_query)
+    write_csv('test_gallery.csv', test_gallery)
     
-    # Save CSVs
-    test_query_path = output_path / "test_query.csv"
-    test_gallery_path = output_path / "test_gallery.csv"
+    print("\n" + "="*60)
+    print("✅ Test splits created successfully!")
+    print("="*60)
+    print(f"Output directory: {output_dir}/")
+    print("\nFiles created:")
+    print(f"  - test_query.csv   ({len(test_query):,} images)")
+    print(f"  - test_gallery.csv ({len(test_gallery):,} images)")
     
-    # Write query CSV
-    with open(test_query_path, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=['img_rel_path', 'pid', 'camid'])
-        writer.writeheader()
-        writer.writerows(test_query_data)
+    # Summary statistics
+    print("\nDataset statistics:")
+    print(f"  Total dogs: {len(test_dog_ids):,}")
+    print(f"  Total images: {len(test_gallery):,}")
+    print(f"  Avg images per dog: {len(test_gallery)/len(test_dog_ids):.1f}")
     
-    # Write gallery CSV
-    with open(test_gallery_path, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=['img_rel_path', 'pid', 'camid'])
-        writer.writeheader()
-        writer.writerows(test_gallery_data)
-    
-    # Count unique dogs
-    query_dogs = len(set(record['pid'] for record in test_query_data))
-    gallery_dogs = len(set(record['pid'] for record in test_gallery_data))
-    
-    # Summary
-    print("\n" + "="*80)
-    print("✅ Large Test Split Created!")
-    print("="*80)
-    print(f"Test Query:   {len(test_query_data):>6} images, {query_dogs:>6} dogs")
-    print(f"Test Gallery: {len(test_gallery_data):>6} images, {gallery_dogs:>6} dogs")
-    print(f"\nSaved to: {output_dir}/")
-    print(f"  - test_query.csv")
-    print(f"  - test_gallery.csv")
-    print("="*80)
-    
-    print("\n💡 Next steps:")
-    print(f"   1. Update config_petface.py to point to these splits")
-    print(f"   2. Run: uv run python test_petface.py")
-    print(f"   3. Compare performance: ~784 training dogs → {len(test_dog_ids)} test dogs")
-    print()
+    # Calculate dogs with multiple images
+    multi_image_dogs = sum(1 for dog_id in test_dog_ids if len(dog_images[dog_id]) > 1)
+    print(f"  Dogs with multiple images: {multi_image_dogs:,} ({multi_image_dogs/len(test_dog_ids)*100:.1f}%)")
+    print(f"  Dogs with single image: {len(test_dog_ids)-multi_image_dogs:,} ({(len(test_dog_ids)-multi_image_dogs)/len(test_dog_ids)*100:.1f}%)")
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Create large test split")
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Create large test split from PetFace valid images")
     parser.add_argument(
-        '--num_test_dogs',
+        '--num_dogs',
         type=int,
         default=10000,
-        help='Number of dogs to include in test set (default: 10000)'
-    )
-    parser.add_argument(
-        '--data_root',
-        default='/home/sagemaker-user/LostPet/petface/dog',
-        help='Root directory with dog images'
+        help='Number of dogs for test set (default: 10000)'
     )
     parser.add_argument(
         '--output_dir',
-        default='./splits_petface_large_test',
-        help='Output directory for splits'
+        type=str,
+        default=None,
+        help='Output directory (default: ./splits_petface_test_<num_dogs>)'
+    )
+    parser.add_argument(
+        '--valid_json',
+        type=str,
+        default='petface_valid_images_with_ears.json',
+        help='Path to valid images JSON'
+    )
+    parser.add_argument(
+        '--seed',
+        type=int,
+        default=42,
+        help='Random seed for reproducibility'
     )
     
     args = parser.parse_args()
     
+    # Set default output dir based on num_dogs
+    if args.output_dir is None:
+        args.output_dir = f"./splits_petface_test_{args.num_dogs//1000}k"
+    
     create_large_test_split(
-        data_root=args.data_root,
+        valid_json_path=args.valid_json,
         output_dir=args.output_dir,
-        num_test_dogs=args.num_test_dogs
+        num_dogs=args.num_dogs,
+        seed=args.seed
     )
-
