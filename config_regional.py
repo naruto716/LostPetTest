@@ -7,11 +7,16 @@ from config_training import TrainingConfig
 
 
 class RegionalConfig(TrainingConfig):
-    """Regional feature extraction config with fine-tuned DINOv3-B (fair comparison to baseline)"""
+    """
+    Regional feature extraction config - v2 with improvements:
+    - DINOv3-L backbone (more capacity for 8 regions)
+    - 128x128 regional crops (vs 64x64 before)
+    - Stronger regularization to prevent overfitting
+    """
     
     # Model Architecture
-    BACKBONE = 'dinov3_vitb16'   # DINOv3-B: 768-dim per region (same as baseline)
-    EMBED_DIM = 768              # Final embedding after fusion
+    BACKBONE = 'dinov3_vitl16'   # DINOv3-L: 1024-dim per region (more capacity for 8 regions)
+    EMBED_DIM = 1024             # Final embedding after fusion (match backbone)
     PRETRAINED = True
     BN_NECK = True
     
@@ -30,19 +35,19 @@ class RegionalConfig(TrainingConfig):
     TEST_GALLERY_SPLIT = "splits_petface_valid/test_gallery.csv"
     
     # Output
-    OUTPUT_DIR = "./outputs/regional_dinov3b_finetuned"
+    OUTPUT_DIR = "./outputs/regional_dinov3l_128px_v2"
     
     # Optimization
     BASE_LR = 3e-4               # Standard learning rate (same as baseline)
-    WEIGHT_DECAY = 0.01
-    MAX_EPOCHS = 120             # Match baseline training length
+    WEIGHT_DECAY = 0.05          # ⬆️ Increased from 0.01 to reduce overfitting
+    MAX_EPOCHS = 60              # ⬇️ Reduced - model peaks early anyway
     
     # Batch size - adjust based on GPU memory
     # Regional model uses 8x forward passes per batch (1 global + 7 regions)
-    # Try to match baseline (64) but may need to reduce if OOM
-    IMS_PER_BATCH = 64           # 16 identities × 4 images (match baseline)
+    # Reduced due to larger backbone (DINOv3-L) and larger regional crops (128x128)
+    IMS_PER_BATCH = 32           # 8 identities × 4 images
     NUM_INSTANCE = 4             # K = 4 images per identity
-    TEST_BATCH_SIZE = 64
+    TEST_BATCH_SIZE = 32         # Reduced for DINOv3-L
     
     # Loss weights (same as baseline)
     ID_LOSS_WEIGHT = 1.0
@@ -50,12 +55,15 @@ class RegionalConfig(TrainingConfig):
     TRIPLET_MARGIN = 0.3
     LABEL_SMOOTHING = 0.1
     
-    # Learning rate schedule (match baseline)
-    STEPS = [40, 70]             # Reduce LR at these epochs (same as baseline)
+    # Learning rate schedule (adjusted for shorter training)
+    STEPS = [30, 50]             # Reduce LR earlier (since we train for 60 epochs)
     GAMMA = 0.1                  # LR reduction factor
     WARMUP_FACTOR = 0.01
     WARMUP_ITERS = 10
     WARMUP_METHOD = 'linear'
+    
+    # Dropout for regularization
+    DROPOUT = 0.3                # Add dropout to fusion layer
     
     # Evaluation
     EVAL_PERIOD = 5              # Evaluate every 5 epochs
@@ -66,7 +74,7 @@ class RegionalConfig(TrainingConfig):
     PIXEL_MEAN = [0.485, 0.456, 0.406]
     PIXEL_STD = [0.229, 0.224, 0.225]
     IMAGE_SIZE = (224, 224)
-    REGIONAL_SIZE = (64, 64)     # Size for regional images
+    REGIONAL_SIZE = (128, 128)   # ⬆️ Increased from 64x64 - more details for regions
     PADDING = 10
     ROTATION_DEGREE = 10
     BRIGHTNESS = 0.2
