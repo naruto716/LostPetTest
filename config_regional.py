@@ -9,15 +9,15 @@ from config_training import TrainingConfig
 class RegionalConfig(TrainingConfig):
     """
     Regional feature extraction config - v3 with Attention Fusion:
-    - DINOv3-L backbone (more capacity for 8 regions)
-    - 128x128 regional crops (vs 64x64 before)
+    - DINOv3-B backbone (same as baseline for fair comparison)
+    - 128x128 regional crops (vs 64x64 before - more details)
     - Attention-based fusion (learns to ignore bad landmarks!)
     - Stronger regularization to prevent overfitting
     """
     
     # Model Architecture
-    BACKBONE = 'dinov3_vitl16'   # DINOv3-L: 1024-dim per region (more capacity for 8 regions)
-    EMBED_DIM = 1024             # Final embedding after fusion (match backbone)
+    BACKBONE = 'dinov3_vitb16'   # DINOv3-B: 768-dim per region (matches baseline, fits in memory)
+    EMBED_DIM = 768              # Final embedding after fusion (match backbone)
     PRETRAINED = True
     BN_NECK = True
     USE_ATTENTION = True         # 🌟 NEW: Use attention fusion instead of simple concat
@@ -37,7 +37,7 @@ class RegionalConfig(TrainingConfig):
     TEST_GALLERY_SPLIT = "splits_petface_valid/test_gallery.csv"
     
     # Output
-    OUTPUT_DIR = "./outputs/regional_dinov3l_attention_v3"
+    OUTPUT_DIR = "./outputs/regional_dinov3b_attention_128px"
     
     # Optimization
     BASE_LR = 3e-4               # Standard learning rate (same as baseline)
@@ -46,10 +46,10 @@ class RegionalConfig(TrainingConfig):
     
     # Batch size - adjust based on GPU memory
     # Regional model uses 8x forward passes per batch (1 global + 7 regions)
-    # Reduced due to larger backbone (DINOv3-L) and larger regional crops (128x128)
+    # DINOv3-B with 128x128 regional crops: be conservative
     IMS_PER_BATCH = 32           # 8 identities × 4 images
     NUM_INSTANCE = 4             # K = 4 images per identity
-    TEST_BATCH_SIZE = 32         # Reduced for DINOv3-L
+    TEST_BATCH_SIZE = 32         # Conservative for 8 regions × 128px
     
     # Loss weights (same as baseline)
     ID_LOSS_WEIGHT = 1.0
