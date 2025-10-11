@@ -15,7 +15,6 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config_regional import cfg as base_cfg
-from datasets.make_dataloader_regional import make_regional_test_loaders
 from model import make_regional_model
 from processor.processor_regional import do_inference
 from utils import setup_logger
