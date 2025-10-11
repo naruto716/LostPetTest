@@ -96,10 +96,14 @@ def create_valid_splits(
         """
         Create query and gallery splits.
         Query: first image of each dog
-        Gallery: all images (including query for single-image dogs)
+        Gallery: REST of images (excluding query)
+        
+        For dogs with only 1 image: included in both query and gallery
+        (standard ReID practice - eval_func handles self-match removal)
         """
         query = []
         gallery = []
+        single_image_dogs = 0
         
         for dog_id in dog_id_list:
             photo_ids = sorted(dog_images[dog_id])
@@ -112,15 +116,25 @@ def create_valid_splits(
                 'camid': 0
             })
             
-            # All images in gallery (includes query for consistency)
-            for photo_id in photo_ids:
+            # Gallery: REST of images (photo_ids[1:])
+            if len(photo_ids) > 1:
+                # Multi-image dog: add remaining images to gallery
+                for photo_id in photo_ids[1:]:
+                    gallery.append({
+                        'img_rel_path': f"{dog_id}/{photo_id}.png",
+                        'pid': dog_id,
+                        'camid': 0
+                    })
+            else:
+                # Single-image dog: also add to gallery (standard practice)
                 gallery.append({
-                    'img_rel_path': f"{dog_id}/{photo_id}.png",
+                    'img_rel_path': f"{dog_id}/{query_photo}.png",
                     'pid': dog_id,
                     'camid': 0
                 })
+                single_image_dogs += 1
         
-        return query, gallery
+        return query, gallery, single_image_dogs
     
     # Collect training data (all images from train dog IDs)
     print("\nCreating training split...")
@@ -129,15 +143,17 @@ def create_valid_splits(
     
     # Create val query/gallery
     print("Creating validation splits...")
-    val_query, val_gallery = create_query_gallery(val_ids)
+    val_query, val_gallery, val_single = create_query_gallery(val_ids)
     print(f"  Val query: {len(val_query)} images ({len(val_ids)} dogs)")
     print(f"  Val gallery: {len(val_gallery)} images")
+    print(f"  Val single-image dogs: {val_single} (included in both query & gallery)")
     
     # Create test query/gallery
     print("Creating test splits...")
-    test_query, test_gallery = create_query_gallery(test_ids)
+    test_query, test_gallery, test_single = create_query_gallery(test_ids)
     print(f"  Test query: {len(test_query)} images ({len(test_ids)} dogs)")
     print(f"  Test gallery: {len(test_gallery)} images")
+    print(f"  Test single-image dogs: {test_single} (included in both query & gallery)")
     
     # Write CSV files
     def write_csv(filename, data):
