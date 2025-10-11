@@ -152,13 +152,17 @@ def main():
     
     # Create model
     logger.info("🏗️  Creating regional model...")
+    use_attention = getattr(cfg, 'USE_ATTENTION', False)  # Default to False if not specified
     model = make_regional_model(
         backbone_name=cfg.BACKBONE,
         num_classes=num_classes,
         embed_dim=cfg.EMBED_DIM,
         pretrained=False,  # We're loading weights from checkpoint
-        bn_neck=cfg.BN_NECK
+        bn_neck=cfg.BN_NECK,
+        use_attention=use_attention
     )
+    if use_attention:
+        logger.info("✨ Model uses attention-based fusion")
     
     # Load checkpoint weights
     logger.info("⚙️  Loading model weights...")

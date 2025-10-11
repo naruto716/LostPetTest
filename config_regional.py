@@ -8,9 +8,10 @@ from config_training import TrainingConfig
 
 class RegionalConfig(TrainingConfig):
     """
-    Regional feature extraction config - v2 with improvements:
+    Regional feature extraction config - v3 with Attention Fusion:
     - DINOv3-L backbone (more capacity for 8 regions)
     - 128x128 regional crops (vs 64x64 before)
+    - Attention-based fusion (learns to ignore bad landmarks!)
     - Stronger regularization to prevent overfitting
     """
     
@@ -19,6 +20,7 @@ class RegionalConfig(TrainingConfig):
     EMBED_DIM = 1024             # Final embedding after fusion (match backbone)
     PRETRAINED = True
     BN_NECK = True
+    USE_ATTENTION = True         # 🌟 NEW: Use attention fusion instead of simple concat
     
     # Training Strategy
     FREEZE_BACKBONE = False      # Fine-tune backbone for better performance
@@ -35,7 +37,7 @@ class RegionalConfig(TrainingConfig):
     TEST_GALLERY_SPLIT = "splits_petface_valid/test_gallery.csv"
     
     # Output
-    OUTPUT_DIR = "./outputs/regional_dinov3l_128px_v2"
+    OUTPUT_DIR = "./outputs/regional_dinov3l_attention_v3"
     
     # Optimization
     BASE_LR = 3e-4               # Standard learning rate (same as baseline)
