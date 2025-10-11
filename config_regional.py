@@ -7,16 +7,16 @@ from config_training import TrainingConfig
 
 
 class RegionalConfig(TrainingConfig):
-    """Regional feature extraction config with frozen DINOv3-L"""
+    """Regional feature extraction config with fine-tuned DINOv3-B (fair comparison to baseline)"""
     
     # Model Architecture
-    BACKBONE = 'dinov3_vitl16'   # DINOv3-L: 1024-dim per region
+    BACKBONE = 'dinov3_vitb16'   # DINOv3-B: 768-dim per region (same as baseline)
     EMBED_DIM = 768              # Final embedding after fusion
     PRETRAINED = True
     BN_NECK = True
     
     # Training Strategy
-    FREEZE_BACKBONE = True       # Keep DINOv3 frozen, only train fusion
+    FREEZE_BACKBONE = False      # Fine-tune backbone for better performance
     
     # Dataset Paths - Using filtered valid splits
     ROOT_DIR = "/home/sagemaker-user/LostPet/LostPetTest"
@@ -30,28 +30,28 @@ class RegionalConfig(TrainingConfig):
     TEST_GALLERY_SPLIT = "splits_petface_valid/test_gallery.csv"
     
     # Output
-    OUTPUT_DIR = "./outputs/regional_dinov3l"
+    OUTPUT_DIR = "./outputs/regional_dinov3b_finetuned"
     
     # Optimization
-    BASE_LR = 3e-4               # Standard learning rate for fusion layer
+    BASE_LR = 3e-4               # Standard learning rate (same as baseline)
     WEIGHT_DECAY = 0.01
-    MAX_EPOCHS = 60
+    MAX_EPOCHS = 120             # Match baseline training length
     
     # Batch size - adjust based on GPU memory
     # Regional model uses 8x forward passes per batch (1 global + 7 regions)
-    # Dataset has ~3 images per dog, so K must be small
-    IMS_PER_BATCH = 32           # 8 identities × 4 images
-    NUM_INSTANCE = 4             # K = 4 images per identity (realistic for ~3 avg)
+    # Try to match baseline (64) but may need to reduce if OOM
+    IMS_PER_BATCH = 64           # 16 identities × 4 images (match baseline)
+    NUM_INSTANCE = 4             # K = 4 images per identity
     TEST_BATCH_SIZE = 64
     
-    # Loss weights
+    # Loss weights (same as baseline)
     ID_LOSS_WEIGHT = 1.0
     TRIPLET_LOSS_WEIGHT = 1.0
     TRIPLET_MARGIN = 0.3
     LABEL_SMOOTHING = 0.1
     
-    # Learning rate schedule
-    STEPS = [30, 50]             # Reduce LR at these epochs
+    # Learning rate schedule (match baseline)
+    STEPS = [40, 70]             # Reduce LR at these epochs (same as baseline)
     GAMMA = 0.1                  # LR reduction factor
     WARMUP_FACTOR = 0.01
     WARMUP_ITERS = 10
