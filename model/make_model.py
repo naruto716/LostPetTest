@@ -23,7 +23,7 @@ class DogReIDModel(nn.Module):
     
     def __init__(
         self, 
-        backbone_name: str = 'dinov2_vitb14',
+        backbone_name: str = 'dinov3_vitl16',
         num_classes: int = 0,
         embed_dim: int = None,
         pretrained: bool = True,

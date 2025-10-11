@@ -13,6 +13,15 @@ import torch
 import torch.nn as nn
 from torch.cuda import amp
 from utils.meter import AverageMeter
+import csv
+
+def _append_csv(path, header, row_dict):
+    is_new = not os.path.exists(path)
+    with open(path, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=header)
+        if is_new:
+            writer.writeheader()
+        writer.writerow(row_dict)
 
 def do_train(
     cfg,
@@ -197,6 +206,18 @@ Throughput:     {train_loader.batch_size / time_per_batch:.1f} samples/s
 """
         print(epoch_summary)
         logger.info(epoch_summary)
+
+        train_csv = os.path.join(cfg.OUTPUT_DIR, "train_log.csv")
+        _append_csv(
+            train_csv,
+            header=["epoch", "avg_loss", "avg_acc", "lr"],
+            row_dict={
+                    "epoch": epoch,
+                    "avg_loss": round(loss_meter.avg, 6),
+                    "avg_acc": round(acc_meter.avg, 6),
+                    "lr": float(scheduler.get_lr()[0]),
+            },
+            )
         
         # Save checkpoint
         if epoch % checkpoint_period == 0:
@@ -241,6 +262,22 @@ Best mAP:       {max(mAP, best_mAP):.2%} {'🏆 NEW BEST!' if mAP > best_mAP els
 """
             print(val_summary)
             logger.info(val_summary)
+
+            eval_csv = os.path.join(cfg.OUTPUT_DIR, "eval_log.csv")
+            rank1 = float(cmc[0]); rank5 = float(cmc[4]); rank10 = float(cmc[9]); rank20 = float(cmc[19])
+            _append_csv(
+                eval_csv,
+                header=["epoch", "mAP", "rank1", "rank5", "rank10", "rank20", "eval_time_s"],
+                    row_dict={
+                        "epoch": epoch,
+                        "mAP": round(float(mAP), 6),
+                        "rank1": round(rank1, 6),
+                        "rank5": round(rank5, 6),
+                        "rank10": round(rank10, 6),
+                        "rank20": round(rank20, 6),
+                        "eval_time_s": round(val_time, 3),
+                    },
+                )
             
             # Save best model
             if mAP > best_mAP:

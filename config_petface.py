@@ -3,10 +3,8 @@ Configuration for PetFace dataset training.
 """
 
 class PetFaceConfig:
-    # Dataset paths
-    ROOT_DIR = "/home/sagemaker-user/LostPet/petface"  # Where images are stored
-    IMAGES_DIR = "dog"  # Subdirectory containing dog ID folders
     
+<<<<<<< HEAD
     # CSV splits (absolute paths - kept in code repo for version control)
     # NOTE: Using 30k dog dataset (splits_petface_valid)
     # To use subset for testing, change splits_petface_valid -> splits_petface_subset
@@ -15,6 +13,16 @@ class PetFaceConfig:
     VAL_GALLERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_valid/val_gallery.csv"
     TEST_QUERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_valid/test_query.csv"
     TEST_GALLERY_SPLIT = "/home/sagemaker-user/LostPet/LostPetTest/splits_petface_valid/test_gallery.csv"
+=======
+    # Dataset paths
+    ROOT_DIR = "/home/sagemaker-user/src/Mine/"
+    IMAGES_DIR = "dog"
+    TRAIN_SPLIT = "/home/sagemaker-user/src/Mine/subset_splits_petface/train_subset.csv"
+    VAL_QUERY_SPLIT = "/home/sagemaker-user/src/Mine/subset_splits_petface/test_query_subset.csv"
+    VAL_GALLERY_SPLIT = "/home/sagemaker-user/src/Mine/subset_splits_petface/test_gallery_subset.csv"
+    TEST_QUERY_SPLIT = "/home/sagemaker-user/src/Mine/subset_splits_petface/test_query_subset.csv"
+    TEST_GALLERY_SPLIT = "/home/sagemaker-user/src/Mine/subset_splits_petface/test_gallery_subset.csv"
+>>>>>>> main
     USE_CAMID = False  # No camera IDs in petface dataset
     
     # Image preprocessing

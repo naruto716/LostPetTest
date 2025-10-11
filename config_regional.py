@@ -19,9 +19,9 @@ class RegionalConfig(TrainingConfig):
     FREEZE_BACKBONE = True       # Keep DINOv3 frozen, only train fusion
     
     # Dataset Paths - Using filtered valid splits
-    ROOT_DIR = "/home/sagemaker-user/LostPet/LostPetTest"
-    IMAGES_DIR = "/home/sagemaker-user/LostPet/PetFace/dog"
-    LANDMARKS_DIR = "/home/sagemaker-user/LostPet/dogface_landmark_estimation_hrcnn/petface_landmarks_json_all"
+    ROOT_DIR = "/home/sagemaker-user/src/LostPetTest"
+    IMAGES_DIR = "/home/sagemaker-user/src/Mine/dog"
+    LANDMARKS_DIR = "/home/sagemaker-user/src/Mine/dog_landmarks"
     
     TRAIN_SPLIT = "splits_petface_valid/train.csv"
     VAL_QUERY_SPLIT = "splits_petface_valid/val_query.csv"
