@@ -111,10 +111,14 @@ def create_large_test_split(
         """
         Create query and gallery splits.
         Query: first image of each dog
-        Gallery: all images (including query for single-image dogs)
+        Gallery: REST of images (excluding query)
+        
+        For dogs with only 1 image: included in both query and gallery
+        (standard ReID practice - eval_func handles self-match removal)
         """
         query = []
         gallery = []
+        single_image_dogs = 0
         
         for dog_id in dog_id_list:
             photo_ids = sorted(dog_images[dog_id])
@@ -127,21 +131,32 @@ def create_large_test_split(
                 'camid': 0
             })
             
-            # All images in gallery (includes query for consistency)
-            for photo_id in photo_ids:
+            # Gallery: REST of images (photo_ids[1:])
+            if len(photo_ids) > 1:
+                # Multi-image dog: add remaining images to gallery
+                for photo_id in photo_ids[1:]:
+                    gallery.append({
+                        'img_rel_path': f"{dog_id}/{photo_id}.png",
+                        'pid': dog_id,
+                        'camid': 0
+                    })
+            else:
+                # Single-image dog: also add to gallery (standard practice)
                 gallery.append({
-                    'img_rel_path': f"{dog_id}/{photo_id}.png",
+                    'img_rel_path': f"{dog_id}/{query_photo}.png",
                     'pid': dog_id,
                     'camid': 0
                 })
+                single_image_dogs += 1
         
-        return query, gallery
+        return query, gallery, single_image_dogs
     
     # Create test query/gallery
     print("\nCreating test splits...")
-    test_query, test_gallery = create_query_gallery(test_dog_ids)
+    test_query, test_gallery, test_single = create_query_gallery(test_dog_ids)
     print(f"  Test query: {len(test_query)} images ({len(test_dog_ids)} dogs)")
     print(f"  Test gallery: {len(test_gallery)} images")
+    print(f"  Test single-image dogs: {test_single} (included in both query & gallery)")
     
     # Write CSV files
     def write_csv(filename, data):
@@ -167,13 +182,16 @@ def create_large_test_split(
     # Summary statistics
     print("\n📊 Dataset statistics:")
     print(f"  Total dogs in test: {len(test_dog_ids):,}")
-    print(f"  Total images: {len(test_gallery):,}")
-    print(f"  Avg images per dog: {len(test_gallery)/len(test_dog_ids):.1f}")
+    print(f"  Query images: {len(test_query):,} (1 per dog)")
+    print(f"  Gallery images: {len(test_gallery):,}")
+    print(f"  Avg gallery images per dog: {len(test_gallery)/len(test_dog_ids):.1f}")
     
     # Calculate dogs with multiple images
-    multi_image_dogs = sum(1 for dog_id in test_dog_ids if len(dog_images[dog_id]) > 1)
-    print(f"  Dogs with multiple images: {multi_image_dogs:,} ({multi_image_dogs/len(test_dog_ids)*100:.1f}%)")
-    print(f"  Dogs with single image: {len(test_dog_ids)-multi_image_dogs:,} ({(len(test_dog_ids)-multi_image_dogs)/len(test_dog_ids)*100:.1f}%)")
+    multi_image_dogs = len(test_dog_ids) - test_single
+    print(f"\n  Dogs with multiple images: {multi_image_dogs:,} ({multi_image_dogs/len(test_dog_ids)*100:.1f}%)")
+    print(f"    → Query: 1st image, Gallery: remaining images")
+    print(f"  Dogs with single image: {test_single:,} ({test_single/len(test_dog_ids)*100:.1f}%)")
+    print(f"    → Same image in both query & gallery (standard ReID practice)")
     
     # Data leakage prevention summary
     print("\n🔒 Data Leakage Prevention:")
