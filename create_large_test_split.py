@@ -1,204 +1,284 @@
 """
-Create a large test split from PetFace for generalization testing.
-
-Purpose: Test a model trained on ~784 dogs on a much larger set of UNSEEN dogs
-to evaluate how well it generalizes to many more identities.
-
-The trained model was trained on subset dogs (train split).
-This creates a NEW test set with many more different dogs.
+Create a large test set (query/gallery) from filtered valid images JSON.
+For testing model on a large number of dogs without training.
 """
 
-from pathlib import Path
-import random
+import json
 import csv
-import argparse
+import random
+import os
+from pathlib import Path
+
 
 def create_large_test_split(
-    data_root="/home/sagemaker-user/LostPet/petface/dog",
-    output_dir="./splits_petface_large_test",
-    num_test_dogs=10000,  # Target number of test dogs
-    trained_dogs_file="./splits_petface_subset/train.csv",  # Dogs already used for training
-    seed=42
+    valid_json_path="petface_valid_images_with_ears.json",
+    output_dir="./splits_petface_test_10k",
+    num_dogs=10000,
+    seed=42,
+    exclude_train_csv=None,
+    exclude_val_query_csv=None,
+    exclude_val_gallery_csv=None
 ):
     """
-    Create a large test set with many unseen dog identities.
+    Create test query/gallery splits from filtered valid images.
+    Ensures NO DATA LEAKAGE by excluding dogs from train/val splits.
     
     Args:
-        data_root: Root directory containing dog ID folders
-        output_dir: Where to save the new test split CSVs
-        num_test_dogs: How many NEW dogs to include in test set
-        trained_dogs_file: CSV of dogs used for training (we exclude these)
-        seed: Random seed
+        valid_json_path: Path to filtered valid images JSON
+        output_dir: Directory to save CSV split files
+        num_dogs: Number of dogs to use for test set (default: 10000)
+        seed: Random seed for reproducibility
+        exclude_train_csv: Path to train CSV to exclude those dog IDs
+        exclude_val_query_csv: Path to val query CSV to exclude those dog IDs
+        exclude_val_gallery_csv: Path to val gallery CSV to exclude those dog IDs
     """
-    print("\n" + "="*80)
-    print("🧪 Creating Large Test Split for Generalization Testing")
-    print("="*80)
-    
     random.seed(seed)
-    data_path = Path(data_root)
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
     
-    # Get all available dog IDs
-    all_dog_ids = sorted([d.name for d in data_path.iterdir() if d.is_dir()])
-    print(f"📊 Total dogs in dataset: {len(all_dog_ids)}")
+    # Load filtered valid images
+    print("Loading filtered valid images...")
+    with open(valid_json_path, 'r') as f:
+        data = json.load(f)
     
-    # Load dogs that were used for training (to EXCLUDE them)
-    print(f"📂 Loading trained dogs from: {trained_dogs_file}")
-    trained_dog_ids = set()
-    if Path(trained_dogs_file).exists():
-        with open(trained_dogs_file, 'r') as f:
+    dog_images = data['dog_images']
+    all_dog_ids = sorted(dog_images.keys())
+    
+    print(f"Total valid dog IDs available: {len(all_dog_ids)}")
+    print(f"Total valid images: {data['metadata']['final_valid_images']}")
+    
+    # Collect dog IDs to exclude (from train/val)
+    excluded_dog_ids = set()
+    
+    if exclude_train_csv:
+        print(f"\n🔒 Excluding dogs from train CSV: {exclude_train_csv}")
+        with open(exclude_train_csv, 'r') as f:
             reader = csv.DictReader(f)
-            for row in reader:
-                trained_dog_ids.add(str(row['pid']))
-        print(f"   Trained on: {len(trained_dog_ids)} dogs")
+            train_pids = {row['pid'] for row in reader}
+            excluded_dog_ids.update(train_pids)
+            print(f"   Found {len(train_pids)} train dogs")
+    
+    if exclude_val_query_csv:
+        print(f"🔒 Excluding dogs from val query CSV: {exclude_val_query_csv}")
+        with open(exclude_val_query_csv, 'r') as f:
+            reader = csv.DictReader(f)
+            val_pids = {row['pid'] for row in reader}
+            excluded_dog_ids.update(val_pids)
+            print(f"   Found {len(val_pids)} val dogs")
+    
+    if exclude_val_gallery_csv:
+        print(f"🔒 Excluding dogs from val gallery CSV: {exclude_val_gallery_csv}")
+        with open(exclude_val_gallery_csv, 'r') as f:
+            reader = csv.DictReader(f)
+            val_gallery_pids = {row['pid'] for row in reader}
+            excluded_dog_ids.update(val_gallery_pids)
+            print(f"   Found {len(val_gallery_pids)} val gallery dogs")
+    
+    print(f"\n📊 Total unique dogs to exclude: {len(excluded_dog_ids)}")
+    
+    # Filter out excluded dogs
+    available_dog_ids = [dog_id for dog_id in all_dog_ids if dog_id not in excluded_dog_ids]
+    print(f"📊 Dogs available for test set (after exclusion): {len(available_dog_ids)}")
+    
+    if len(available_dog_ids) == 0:
+        raise ValueError("No dogs available after exclusion! Check your CSV paths.")
+    
+    # Select dogs for test set
+    if num_dogs is not None and num_dogs < len(available_dog_ids):
+        print(f"\n✅ Selecting {num_dogs} dogs for test set (no data leakage)")
+        random.seed(seed)
+        test_dog_ids = random.sample(available_dog_ids, num_dogs)
     else:
-        print("   ⚠️  Training file not found, using all dogs")
+        test_dog_ids = available_dog_ids
+        print(f"\n✅ Using all {len(test_dog_ids)} available dogs for test set")
+        if num_dogs is not None and num_dogs > len(available_dog_ids):
+            print(f"   ⚠️  Warning: Requested {num_dogs} dogs but only {len(available_dog_ids)} available")
     
-    # Get UNSEEN dogs (not used for training)
-    unseen_dogs = [dog_id for dog_id in all_dog_ids if dog_id not in trained_dog_ids]
-    print(f"✅ Available unseen dogs: {len(unseen_dogs)}")
+    # Shuffle for good measure
+    random.shuffle(test_dog_ids)
     
-    # Sample test dogs
-    if len(unseen_dogs) < num_test_dogs:
-        print(f"⚠️  Only {len(unseen_dogs)} unseen dogs available, using all")
-        test_dog_ids = unseen_dogs
-    else:
-        test_dog_ids = random.sample(unseen_dogs, num_test_dogs)
+    # Verify no overlap
+    overlap_check = excluded_dog_ids.intersection(set(test_dog_ids))
+    if overlap_check:
+        raise ValueError(f"❌ DATA LEAKAGE DETECTED! {len(overlap_check)} dogs overlap with train/val")
+    print(f"✅ Verified: No overlap between test and train/val sets")
     
-    print(f"🎯 Selected {len(test_dog_ids)} dogs for large test set")
+    print(f"Test set: {len(test_dog_ids)} dogs")
     
-    # Collect images for test dogs
-    def collect_images(dog_id_list):
-        data = []
-        dogs_with_images = 0
-        total_images = 0
+    # Create output directory
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Helper function to create query/gallery splits
+    def create_query_gallery(dog_id_list):
+        """
+        Create query and gallery splits.
+        Query: first image of each dog
+        Gallery: REST of images (excluding query)
         
-        for i, dog_id in enumerate(dog_id_list):
-            if (i + 1) % 1000 == 0:
-                print(f"   Processing: {i+1}/{len(dog_id_list)} dogs...")
+        For dogs with only 1 image: included in both query and gallery
+        (standard ReID practice - eval_func handles self-match removal)
+        """
+        query = []
+        gallery = []
+        single_image_dogs = 0
+        
+        for dog_id in dog_id_list:
+            photo_ids = sorted(dog_images[dog_id])
             
-            dog_folder = data_path / dog_id
+            # First image as query
+            query_photo = photo_ids[0]
+            query.append({
+                'img_rel_path': f"{dog_id}/{query_photo}.png",
+                'pid': dog_id,
+                'camid': 0
+            })
             
-            # Find all image files
-            image_files = []
-            for ext in ['*.png', '*.jpg', '*.jpeg', '*.PNG', '*.JPG', '*.JPEG']:
-                image_files.extend(dog_folder.glob(ext))
-            
-            image_files = sorted(image_files, key=lambda x: x.name)
-            
-            if len(image_files) == 0:
-                continue
-            
-            dogs_with_images += 1
-            total_images += len(image_files)
-            
-            # Add all images
-            for img_file in image_files:
-                img_rel_path = f"{dog_id}/{img_file.name}"
-                data.append({
-                    'img_rel_path': img_rel_path,
+            # Gallery: REST of images (photo_ids[1:])
+            if len(photo_ids) > 1:
+                # Multi-image dog: add remaining images to gallery
+                for photo_id in photo_ids[1:]:
+                    gallery.append({
+                        'img_rel_path': f"{dog_id}/{photo_id}.png",
+                        'pid': dog_id,
+                        'camid': 0
+                    })
+            else:
+                # Single-image dog: also add to gallery (standard practice)
+                gallery.append({
+                    'img_rel_path': f"{dog_id}/{query_photo}.png",
                     'pid': dog_id,
                     'camid': 0
                 })
+                single_image_dogs += 1
         
-        print(f"   ✅ Found {total_images} images from {dogs_with_images} dogs")
-        return data
+        return query, gallery, single_image_dogs
     
-    # Create query/gallery split
-    def create_query_gallery(dog_id_list, all_data):
-        """Split into query (first image per dog) and gallery (rest)"""
-        query_data = []
-        gallery_data = []
-        
-        # Group by dog ID
-        dog_to_images = {}
-        for record in all_data:
-            pid = record['pid']
-            if pid not in dog_to_images:
-                dog_to_images[pid] = []
-            dog_to_images[pid].append(record)
-        
-        for dog_id in dog_id_list:
-            if dog_id not in dog_to_images:
-                continue
-            
-            images = dog_to_images[dog_id]
-            if len(images) > 0:
-                query_data.append(images[0])  # First image = query
-                gallery_data.extend(images[1:])  # Rest = gallery
-        
-        return query_data, gallery_data
+    # Create test query/gallery
+    print("\nCreating test splits...")
+    test_query, test_gallery, test_single = create_query_gallery(test_dog_ids)
+    print(f"  Test query: {len(test_query)} images ({len(test_dog_ids)} dogs)")
+    print(f"  Test gallery: {len(test_gallery)} images")
+    print(f"  Test single-image dogs: {test_single} (included in both query & gallery)")
     
-    # Collect test images
-    print("\n📸 Collecting test images...")
-    test_data = collect_images(test_dog_ids)
+    # Write CSV files
+    def write_csv(filename, data):
+        filepath = os.path.join(output_dir, filename)
+        with open(filepath, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=['img_rel_path', 'pid', 'camid'])
+            writer.writeheader()
+            writer.writerows(data)
+        print(f"  Saved: {filepath}")
     
-    # Create query/gallery split
-    print("\n🔀 Creating query/gallery split...")
-    test_query_data, test_gallery_data = create_query_gallery(test_dog_ids, test_data)
+    print("\nWriting CSV files...")
+    write_csv('test_query.csv', test_query)
+    write_csv('test_gallery.csv', test_gallery)
     
-    # Save CSVs
-    test_query_path = output_path / "test_query.csv"
-    test_gallery_path = output_path / "test_gallery.csv"
+    print("\n" + "="*60)
+    print("✅ Test splits created successfully!")
+    print("="*60)
+    print(f"Output directory: {output_dir}/")
+    print("\nFiles created:")
+    print(f"  - test_query.csv   ({len(test_query):,} images)")
+    print(f"  - test_gallery.csv ({len(test_gallery):,} images)")
     
-    # Write query CSV
-    with open(test_query_path, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=['img_rel_path', 'pid', 'camid'])
-        writer.writeheader()
-        writer.writerows(test_query_data)
+    # Summary statistics
+    print("\n📊 Dataset statistics:")
+    print(f"  Total dogs in test: {len(test_dog_ids):,}")
+    print(f"  Query images: {len(test_query):,} (1 per dog)")
+    print(f"  Gallery images: {len(test_gallery):,}")
+    print(f"  Avg gallery images per dog: {len(test_gallery)/len(test_dog_ids):.1f}")
     
-    # Write gallery CSV
-    with open(test_gallery_path, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=['img_rel_path', 'pid', 'camid'])
-        writer.writeheader()
-        writer.writerows(test_gallery_data)
+    # Calculate dogs with multiple images
+    multi_image_dogs = len(test_dog_ids) - test_single
+    print(f"\n  Dogs with multiple images: {multi_image_dogs:,} ({multi_image_dogs/len(test_dog_ids)*100:.1f}%)")
+    print(f"    → Query: 1st image, Gallery: remaining images")
+    print(f"  Dogs with single image: {test_single:,} ({test_single/len(test_dog_ids)*100:.1f}%)")
+    print(f"    → Same image in both query & gallery (standard ReID practice)")
     
-    # Count unique dogs
-    query_dogs = len(set(record['pid'] for record in test_query_data))
-    gallery_dogs = len(set(record['pid'] for record in test_gallery_data))
-    
-    # Summary
-    print("\n" + "="*80)
-    print("✅ Large Test Split Created!")
-    print("="*80)
-    print(f"Test Query:   {len(test_query_data):>6} images, {query_dogs:>6} dogs")
-    print(f"Test Gallery: {len(test_gallery_data):>6} images, {gallery_dogs:>6} dogs")
-    print(f"\nSaved to: {output_dir}/")
-    print(f"  - test_query.csv")
-    print(f"  - test_gallery.csv")
-    print("="*80)
-    
-    print("\n💡 Next steps:")
-    print(f"   1. Update config_petface.py to point to these splits")
-    print(f"   2. Run: uv run python test_petface.py")
-    print(f"   3. Compare performance: ~784 training dogs → {len(test_dog_ids)} test dogs")
-    print()
+    # Data leakage prevention summary
+    print("\n🔒 Data Leakage Prevention:")
+    if excluded_dog_ids:
+        print(f"  Excluded {len(excluded_dog_ids):,} dogs from train/val")
+        print(f"  Test dogs are 100% disjoint from train/val ✅")
+    else:
+        print(f"  ⚠️  WARNING: No exclusion applied!")
+        print(f"  Consider using --exclude_splits_dir to prevent data leakage")
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Create large test split")
-    parser.add_argument(
-        '--num_test_dogs',
-        type=int,
-        default=10000,
-        help='Number of dogs to include in test set (default: 10000)'
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="Create large test split from PetFace valid images (with data leakage prevention)"
     )
     parser.add_argument(
-        '--data_root',
-        default='/home/sagemaker-user/LostPet/petface/dog',
-        help='Root directory with dog images'
+        '--num_dogs',
+        type=int,
+        default=10000,
+        help='Number of dogs for test set (default: 10000)'
     )
     parser.add_argument(
         '--output_dir',
-        default='./splits_petface_large_test',
-        help='Output directory for splits'
+        type=str,
+        default=None,
+        help='Output directory (default: ./splits_petface_test_<num_dogs>)'
+    )
+    parser.add_argument(
+        '--valid_json',
+        type=str,
+        default='petface_valid_images_with_ears.json',
+        help='Path to valid images JSON'
+    )
+    parser.add_argument(
+        '--exclude_train_csv',
+        type=str,
+        default=None,
+        help='Path to train CSV - dogs in this file will be EXCLUDED from test set'
+    )
+    parser.add_argument(
+        '--exclude_val_query_csv',
+        type=str,
+        default=None,
+        help='Path to val query CSV - dogs in this file will be EXCLUDED from test set'
+    )
+    parser.add_argument(
+        '--exclude_val_gallery_csv',
+        type=str,
+        default=None,
+        help='Path to val gallery CSV - dogs in this file will be EXCLUDED from test set'
+    )
+    parser.add_argument(
+        '--exclude_splits_dir',
+        type=str,
+        default=None,
+        help='Directory containing train.csv, val_query.csv, val_gallery.csv (convenience option)'
+    )
+    parser.add_argument(
+        '--seed',
+        type=int,
+        default=42,
+        help='Random seed for reproducibility'
     )
     
     args = parser.parse_args()
     
+    # Set default output dir based on num_dogs
+    if args.output_dir is None:
+        args.output_dir = f"./splits_petface_test_{args.num_dogs//1000}k"
+    
+    # Convenience: if exclude_splits_dir provided, auto-fill individual CSVs
+    if args.exclude_splits_dir:
+        if not args.exclude_train_csv:
+            args.exclude_train_csv = os.path.join(args.exclude_splits_dir, 'train.csv')
+        if not args.exclude_val_query_csv:
+            args.exclude_val_query_csv = os.path.join(args.exclude_splits_dir, 'val_query.csv')
+        if not args.exclude_val_gallery_csv:
+            args.exclude_val_gallery_csv = os.path.join(args.exclude_splits_dir, 'val_gallery.csv')
+    
     create_large_test_split(
-        data_root=args.data_root,
+        valid_json_path=args.valid_json,
         output_dir=args.output_dir,
-        num_test_dogs=args.num_test_dogs
+        num_dogs=args.num_dogs,
+        seed=args.seed,
+        exclude_train_csv=args.exclude_train_csv,
+        exclude_val_query_csv=args.exclude_val_query_csv,
+        exclude_val_gallery_csv=args.exclude_val_gallery_csv
     )
-

@@ -7,16 +7,23 @@ from config_training import TrainingConfig
 
 
 class RegionalConfig(TrainingConfig):
-    """Regional feature extraction config with frozen DINOv3-L"""
+    """
+    Regional feature extraction config - v3 with Attention Fusion:
+    - DINOv3-B backbone (same as baseline for fair comparison)
+    - 128x128 regional crops (vs 64x64 before - more details)
+    - Attention-based fusion (learns to ignore bad landmarks!)
+    - Stronger regularization to prevent overfitting
+    """
     
     # Model Architecture
-    BACKBONE = 'dinov3_vitl16'   # DINOv3-L: 1024-dim per region
-    EMBED_DIM = 768              # Final embedding after fusion
+    BACKBONE = 'dinov3_vitb16'   # DINOv3-B: 768-dim per region (matches baseline, fits in memory)
+    EMBED_DIM = 768              # Final embedding after fusion (match backbone)
     PRETRAINED = True
     BN_NECK = True
+    USE_ATTENTION = True         # 🌟 NEW: Use attention fusion instead of simple concat
     
     # Training Strategy
-    FREEZE_BACKBONE = True       # Keep DINOv3 frozen, only train fusion
+    FREEZE_BACKBONE = False      # Fine-tune backbone for better performance
     
     # Dataset Paths - Using filtered valid splits
     ROOT_DIR = "/home/sagemaker-user/LostPet/LostPetTest"
@@ -30,32 +37,35 @@ class RegionalConfig(TrainingConfig):
     TEST_GALLERY_SPLIT = "splits_petface_valid/test_gallery.csv"
     
     # Output
-    OUTPUT_DIR = "./outputs/regional_dinov3l"
+    OUTPUT_DIR = "./outputs/regional_dinov3b_attention_128px"
     
     # Optimization
-    BASE_LR = 3e-4               # Standard learning rate for fusion layer
-    WEIGHT_DECAY = 0.01
-    MAX_EPOCHS = 60
+    BASE_LR = 3e-4               # Standard learning rate (same as baseline)
+    WEIGHT_DECAY = 0.05          # ⬆️ Increased from 0.01 to reduce overfitting
+    MAX_EPOCHS = 60              # ⬇️ Reduced - model peaks early anyway
     
     # Batch size - adjust based on GPU memory
     # Regional model uses 8x forward passes per batch (1 global + 7 regions)
-    # Dataset has ~3 images per dog, so K must be small
+    # DINOv3-B with 128x128 regional crops: be conservative
     IMS_PER_BATCH = 32           # 8 identities × 4 images
-    NUM_INSTANCE = 4             # K = 4 images per identity (realistic for ~3 avg)
-    TEST_BATCH_SIZE = 64
+    NUM_INSTANCE = 4             # K = 4 images per identity
+    TEST_BATCH_SIZE = 32         # Conservative for 8 regions × 128px
     
-    # Loss weights
+    # Loss weights (same as baseline)
     ID_LOSS_WEIGHT = 1.0
     TRIPLET_LOSS_WEIGHT = 1.0
     TRIPLET_MARGIN = 0.3
     LABEL_SMOOTHING = 0.1
     
-    # Learning rate schedule
-    STEPS = [30, 50]             # Reduce LR at these epochs
+    # Learning rate schedule (adjusted for shorter training)
+    STEPS = [30, 50]             # Reduce LR earlier (since we train for 60 epochs)
     GAMMA = 0.1                  # LR reduction factor
     WARMUP_FACTOR = 0.01
     WARMUP_ITERS = 10
     WARMUP_METHOD = 'linear'
+    
+    # Dropout for regularization
+    DROPOUT = 0.3                # Add dropout to fusion layer
     
     # Evaluation
     EVAL_PERIOD = 5              # Evaluate every 5 epochs
@@ -66,7 +76,7 @@ class RegionalConfig(TrainingConfig):
     PIXEL_MEAN = [0.485, 0.456, 0.406]
     PIXEL_STD = [0.229, 0.224, 0.225]
     IMAGE_SIZE = (224, 224)
-    REGIONAL_SIZE = (64, 64)     # Size for regional images
+    REGIONAL_SIZE = (128, 128)   # ⬆️ Increased from 64x64 - more details for regions
     PADDING = 10
     ROTATION_DEGREE = 10
     BRIGHTNESS = 0.2

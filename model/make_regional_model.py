@@ -8,6 +8,7 @@ import torch.nn as nn
 
 from .backbones import build_backbone
 from .layers import BNNeck, ClassificationHead, l2_normalize, weights_init_kaiming
+from .attention_fusion import AttentionFusion
 
 
 class RegionalDogReIDModel(nn.Module):
@@ -30,7 +31,8 @@ class RegionalDogReIDModel(nn.Module):
         num_classes: int = 0,
         embed_dim: int = 768,
         pretrained: bool = True,
-        bn_neck: bool = True
+        bn_neck: bool = True,
+        use_attention: bool = False  # NEW: Use attention fusion instead of concat
     ):
         super().__init__()
         
@@ -38,6 +40,7 @@ class RegionalDogReIDModel(nn.Module):
         self.num_classes = num_classes
         self.embed_dim = embed_dim
         self.bn_neck = bn_neck
+        self.use_attention = use_attention
         
         # Build shared backbone (will be frozen during training)
         self.backbone, backbone_feat_dim = build_backbone(backbone_name, pretrained)
@@ -47,40 +50,45 @@ class RegionalDogReIDModel(nn.Module):
         self.regions = ['left_eye', 'right_eye', 'nose', 'mouth', 
                        'left_ear', 'right_ear', 'forehead']
         
-        # Calculate concatenated feature dimension
-        # 1 global + 7 regions = 8 total
-        concat_dim = backbone_feat_dim * 8
-        
-        # Fusion layer: concatenated features → embed_dim
-        # Similar to MultiLevelFusion but for regional features
-        hidden_dim = max(embed_dim * 2, (concat_dim + embed_dim) // 2)
-        
-        self.fusion = nn.Sequential(
-            nn.Linear(concat_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.1),
-            nn.Linear(hidden_dim, embed_dim),
-            nn.BatchNorm1d(embed_dim),
-        )
-        
-        self._init_fusion_weights()
-        print(f"🔗 Fusion layer: {concat_dim} → {hidden_dim} → {embed_dim}")
-        
-        self.feat_dim = embed_dim
+        # Choose fusion strategy
+        if use_attention:
+            # Attention-based fusion: learns to weight regions by importance
+            num_regions = 1 + len(self.regions)  # global + 7 regions = 8
+            self.fusion = AttentionFusion(
+                num_regions=num_regions,
+                feat_dim=backbone_feat_dim,
+                hidden_dim=256
+            )
+            self.feat_dim = backbone_feat_dim  # Attention fusion preserves dimension
+        else:
+            # Simple concatenation fusion (original approach)
+            concat_dim = backbone_feat_dim * 8  # 1 global + 7 regions
+            hidden_dim = max(embed_dim * 2, (concat_dim + embed_dim) // 2)
+            
+            self.fusion = nn.Sequential(
+                nn.Linear(concat_dim, hidden_dim),
+                nn.BatchNorm1d(hidden_dim),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.1),
+                nn.Linear(hidden_dim, embed_dim),
+                nn.BatchNorm1d(embed_dim),
+            )
+            self._init_fusion_weights()
+            print(f"🔗 Fusion layer: {concat_dim} → {hidden_dim} → {embed_dim}")
+            self.feat_dim = embed_dim
         
         # BN-neck
         if bn_neck:
-            self.bottleneck = BNNeck(embed_dim)
+            self.bottleneck = BNNeck(self.feat_dim)
             self.bottleneck.apply(weights_init_kaiming)
-            print(f"🔧 Added BN-neck (feat_dim: {embed_dim})")
+            print(f"🔧 Added BN-neck (feat_dim: {self.feat_dim})")
         else:
             self.bottleneck = nn.Identity()
         
         # Classifier
         if num_classes > 0:
-            self.classifier = ClassificationHead(embed_dim, num_classes)
-            print(f"🎯 Added classifier head ({embed_dim} → {num_classes} classes)")
+            self.classifier = ClassificationHead(self.feat_dim, num_classes)
+            print(f"🎯 Added classifier head ({self.feat_dim} → {num_classes} classes)")
         else:
             self.classifier = None
         
@@ -120,11 +128,17 @@ class RegionalDogReIDModel(nn.Module):
                 region_feat = torch.flatten(region_feat, 1)
             regional_features.append(region_feat)
         
-        # Concatenate: global + all regions
-        all_features = torch.cat([global_features] + regional_features, dim=1)
-        
-        # Fuse concatenated features
-        fused_features = self.fusion(all_features)
+        # Fuse features (different strategies)
+        if self.use_attention:
+            # Attention fusion: pass list of features [global, region1, region2, ...]
+            all_features_list = [global_features] + regional_features
+            fused_features, attention_weights = self.fusion(all_features_list)
+            # Store attention weights for debugging/visualization (optional)
+            self.last_attention_weights = attention_weights
+        else:
+            # Simple concatenation fusion
+            all_features = torch.cat([global_features] + regional_features, dim=1)
+            fused_features = self.fusion(all_features)
         
         # BN-neck
         bn_features = self.bottleneck(fused_features)
