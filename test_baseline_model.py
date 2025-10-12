@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inference script for trained Regional Dog ReID model.
+Inference script for trained Baseline Dog ReID model (DINOv3-B or similar).
 Runs evaluation on specified test query/gallery splits.
 """
 
@@ -14,9 +14,9 @@ import torch
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config_regional import cfg as base_cfg
-from model import make_regional_model
-from processor.processor_regional import do_inference
+from config_petface import cfg as base_cfg
+from model import make_model
+from processor import do_inference
 from utils import setup_logger
 
 
@@ -33,7 +33,7 @@ def set_seed(seed=42):
 
 def main():
     """Main inference function."""
-    parser = argparse.ArgumentParser(description="Regional Dog ReID Inference")
+    parser = argparse.ArgumentParser(description="Baseline Dog ReID Inference")
     parser.add_argument(
         "--checkpoint", 
         required=True, 
@@ -57,8 +57,8 @@ def main():
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=64,
-        help="Batch size for inference (default: 64)"
+        default=128,
+        help="Batch size for inference (default: 128)"
     )
     parser.add_argument(
         "--num_workers",
@@ -87,9 +87,9 @@ def main():
                 if not attr.startswith('_'):
                     setattr(self, attr, getattr(base_cfg, attr))
             
-            # Override test splits
-            self.TEST_QUERY_SPLIT = args.test_query_csv
-            self.TEST_GALLERY_SPLIT = args.test_gallery_csv
+            # Override test splits with absolute paths
+            self.TEST_QUERY_SPLIT = os.path.abspath(args.test_query_csv)
+            self.TEST_GALLERY_SPLIT = os.path.abspath(args.test_gallery_csv)
             self.TEST_BATCH_SIZE = args.batch_size
             self.NUM_WORKERS = args.num_workers
     
@@ -103,22 +103,24 @@ def main():
         os.makedirs(args.output_dir)
     
     # Setup logger
-    logger = setup_logger("regional_inference", args.output_dir, if_train=False)
-    logger.info("🔍 Starting Regional Dog ReID Inference")
+    logger = setup_logger("baseline_inference", args.output_dir, if_train=False)
+    logger.info("🔍 Starting Baseline Dog ReID Inference")
     logger.info(f"Checkpoint: {args.checkpoint}")
     logger.info(f"Test query CSV: {args.test_query_csv}")
     logger.info(f"Test gallery CSV: {args.test_gallery_csv}")
     logger.info(f"Output directory: {args.output_dir}")
+    logger.info(f"Test splits configured:")
+    logger.info(f"  Query: {cfg.TEST_QUERY_SPLIT}")
+    logger.info(f"  Gallery: {cfg.TEST_GALLERY_SPLIT}")
     
     # Print configuration
     print("\n" + "="*80)
-    print("🎯 REGIONAL DOG REID INFERENCE CONFIGURATION")
+    print("🎯 BASELINE DOG REID INFERENCE CONFIGURATION")
     print("="*80)
     print(f"Checkpoint:        {args.checkpoint}")
     print(f"Backbone:          {cfg.BACKBONE}")
     print(f"Embedding Dim:     {cfg.EMBED_DIM}")
     print(f"Batch Size:        {args.batch_size}")
-    print(f"Regional Size:     {cfg.REGIONAL_SIZE}")
     print(f"Test Query CSV:    {args.test_query_csv}")
     print(f"Test Gallery CSV:  {args.test_gallery_csv}")
     print("="*80 + "\n")
@@ -151,18 +153,14 @@ def main():
         logger.info(f"   Best mAP: {checkpoint['best_mAP']:.1%}")
     
     # Create model
-    logger.info("🏗️  Creating regional model...")
-    use_attention = getattr(cfg, 'USE_ATTENTION', False)  # Default to False if not specified
-    model = make_regional_model(
+    logger.info("🏗️  Creating model...")
+    model = make_model(
         backbone_name=cfg.BACKBONE,
         num_classes=num_classes,
         embed_dim=cfg.EMBED_DIM,
         pretrained=False,  # We're loading weights from checkpoint
-        bn_neck=cfg.BN_NECK,
-        use_attention=use_attention
+        bn_neck=cfg.BN_NECK
     )
-    if use_attention:
-        logger.info("✨ Model uses attention-based fusion")
     
     # Load checkpoint weights
     logger.info("⚙️  Loading model weights...")
@@ -174,14 +172,11 @@ def main():
     import time
     start_time = time.time()
     
-    from datasets.make_dataloader_regional import make_regional_dataloaders
+    from datasets.make_dataloader_petface import make_petface_dataloaders
     
-    # Note: make_regional_dataloaders returns all loaders, we only need test loaders
-    # We still need to create train/val loaders but won't use them
-    (_, _, _, test_query_loader, test_gallery_loader, _) = make_regional_dataloaders(
-        cfg=cfg,
-        landmarks_dir=cfg.LANDMARKS_DIR
-    )
+    # Note: make_petface_dataloaders returns all loaders, we only need test loaders
+    # The function will create train/val loaders from the CSVs in cfg, but we only use test
+    (_, _, _, test_query_loader, test_gallery_loader, _) = make_petface_dataloaders(cfg)
     
     logger.info(f"✅ Data loaders created in {time.time() - start_time:.1f}s")
     logger.info(f"   Test query samples: {len(test_query_loader.dataset)}")
@@ -234,7 +229,7 @@ def main():
     text_results_path = os.path.join(args.output_dir, 'inference_results.txt')
     with open(text_results_path, 'w') as f:
         f.write("="*80 + "\n")
-        f.write("Regional Dog ReID Inference Results\n")
+        f.write("Baseline Dog ReID Inference Results\n")
         f.write("="*80 + "\n\n")
         f.write(f"Checkpoint: {args.checkpoint}\n")
         f.write(f"Test Query CSV: {args.test_query_csv}\n")
@@ -260,3 +255,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
