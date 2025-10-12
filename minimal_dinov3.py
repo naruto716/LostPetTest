@@ -6,11 +6,16 @@ Minimal DINOv3 implementation for inference on PetFace dog re-identification
     Model performance using Top-1, Top-5, and Top-10 accuracy metrics.
     mAP calculation using custom evaluation function.
     CMC curve plot for visualizing retrieval performance.
-Results
+Results with dinov3-vitl16
     Top-1: 0.7941
     Top-5: 0.8821
     Top-10: 0.9087
     mAP: 0.7631
+Results with dinov3-vitb16
+    Top-1: 0.7650
+    Top-5: 0.8578
+    Top-10: 0.8882
+    mAP: 0.7266
 """
 
 # Imports
@@ -29,7 +34,7 @@ from utils.metrics import eval_func, euclidean_distance
 
 # Settings
 os.environ["CUDA_VISIBLE_DEVICES"] = "2"  # Set to preferred GPU
-MODEL_ID = "facebook/dinov3-vitl16-pretrain-lvd1689m"
+MODEL_ID = "facebook/dinov3-vitb16-pretrain-lvd1689m"
 IMAGES_ROOT = "petface/dog"
 GALLERY_CSV = "splits_petface_test_10k/test_gallery.csv"
 QUERY_CSV = "splits_petface_test_10k/test_query.csv"
