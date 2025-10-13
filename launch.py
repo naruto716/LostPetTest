@@ -25,6 +25,9 @@ def main():
     p.add_argument("--freeze_backbone", type=str, default=None)     # true/false
     p.add_argument("--ims_per_batch", type=int, default=None)
     p.add_argument("--num_instance", type=int, default=None)
+    p.add_argument("--eval_split", choices=["val","test"], default="val")
+    p.add_argument("--test_query_split", type=str, default=None)
+    p.add_argument("--test_gallery_split", type=str, default=None)
     args, _ = p.parse_known_args()
 
     # 提前改 cfg
@@ -42,7 +45,8 @@ def main():
     if args.num_instance is not None: cfg.NUM_INSTANCE = args.num_instance
     if args.output_dir is not None: cfg.OUTPUT_DIR = args.output_dir
     if args.epochs is not None: cfg.MAX_EPOCHS = args.epochs
-
+    if args.test_query_split is not None: cfg.TEST_QUERY_SPLIT = args.test_query_split
+    if args.test_gallery_split is not None: cfg.TEST_GALLERY_SPLIT = args.test_gallery_split
     # 透传给训练脚本的 argparse
     sys.argv = ["train_regional.py"]  # 训练脚本的名字（见下行 import）
     if args.output_dir: sys.argv += ["--output_dir", args.output_dir]
