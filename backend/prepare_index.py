@@ -15,8 +15,8 @@ EMBED_DTYPE = np.float16  # 用 float16 存盘（体积减半），服务端再�
 # === 路径设置 ===
 REPO = Path("/home/sagemaker-user/src/LostPetTest")
 ROOT_DIR = Path("/home/sagemaker-user/src/Mine/dog").resolve()
-MODEL_PATH = REPO / "output_petface" / "best_model.pth"
-INDEX_PATH = REPO / "output_petface" / "gallery_index_small.npz"  # 新文件名
+MODEL_PATH = "/home/sagemaker-user/src/LostPetTest/outputs/sweeps_20251011_211632/lr0.0003_m0.3_bnfalse_e20/best_model.pth"
+INDEX_PATH = REPO / "outputs" / "gallery_index_small.npz"  # 新文件名
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # === 模块导入 ===
@@ -34,9 +34,9 @@ transform = transforms.Compose([
 
 # === 构建模型并加载权重 ===
 model = make_model(
-    backbone_name=cfg.BACKBONE,
-    num_classes=400,
-    embed_dim=cfg.EMBED_DIM,   # 你训练日志显示最终 feat_dim=768
+    backbone_name="dinov3_vitl16", 
+    num_classes=0,
+    embed_dim=cfg.EMBED_DIM,
     pretrained=False
 )
 
@@ -59,7 +59,7 @@ model.to(DEVICE).eval()
 print(f"Scanning images in {ROOT_DIR} ...")
 all_images = list(ROOT_DIR.rglob("*.jpg")) + list(ROOT_DIR.rglob("*.png"))
 if len(all_images) == 0:
-    raise SystemExit("⚠️ 没找到图片，请检查 ROOT_DIR")
+    raise SystemExit("Image not found, please check ROOT_DIR")
 
 random.seed(42)
 random.shuffle(all_images)
@@ -91,7 +91,7 @@ for i, p in enumerate(subset_images):
         print("skip (probe):", p, e)
 
 if tmp_feat is None:
-    raise SystemExit("⚠️ 抽样集合里没有可读的图片")
+    raise SystemExit("No feather found, please try again ")
 
 D = tmp_feat.shape[0]
 N = len(subset_images)
@@ -127,7 +127,7 @@ embeddings = embeddings[valid_mask]
 paths = [p for p in paths if p is not None]
 
 if embeddings.shape[0] == 0:
-    raise SystemExit("⚠️ 没有成功处理的图片，退出")
+    raise SystemExit("process failed")
 
 # === 存盘（float16 + 压缩） ===
 np.savez_compressed(INDEX_PATH, embeddings=embeddings, paths=json.dumps(paths))
