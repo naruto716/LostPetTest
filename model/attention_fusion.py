@@ -41,7 +41,7 @@ class AttentionFusion(nn.Module):
             nn.Linear(feat_dim, feat_dim),
             nn.BatchNorm1d(feat_dim),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.3)
+            nn.Dropout(0.5)  # Increased from 0.3 to prevent overfitting
         )
         
         print(f"✨ Attention Fusion: {num_regions} regions × {feat_dim}D → learned weighting")
