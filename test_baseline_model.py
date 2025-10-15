@@ -50,6 +50,18 @@ def main():
         help="Path to test gallery CSV file"
     )
     parser.add_argument(
+        "--backbone",
+        type=str,
+        default=None,
+        help="Override backbone (e.g., 'dinov3_vitl16'). Auto-detected from checkpoint if not provided."
+    )
+    parser.add_argument(
+        "--embed_dim",
+        type=int,
+        default=None,
+        help="Override embed_dim. Auto-detected from checkpoint if not provided."
+    )
+    parser.add_argument(
         "--output_dir",
         default="./inference_results",
         help="Output directory for results (default: ./inference_results)"
@@ -136,28 +148,47 @@ def main():
     else:
         state_dict = checkpoint
     
-    # Find num_classes from classifier weight
+    # Find num_classes and detect backbone/embed_dim from checkpoint
     num_classes = None
+    checkpoint_embed_dim = None
+    
     for key in state_dict.keys():
         if 'classifier' in key and 'weight' in key and 'bn_neck' not in key:
+            # Classifier shape: [num_classes, feat_dim]
             num_classes = state_dict[key].shape[0]
+            checkpoint_embed_dim = state_dict[key].shape[1]
             break
     
     if num_classes is None:
         raise ValueError("Could not determine num_classes from checkpoint")
     
     logger.info(f"   Detected {num_classes} classes from checkpoint")
+    logger.info(f"   Detected embedding dim: {checkpoint_embed_dim}")
     if 'epoch' in checkpoint:
         logger.info(f"   Checkpoint epoch: {checkpoint['epoch']}")
     if 'best_mAP' in checkpoint:
         logger.info(f"   Best mAP: {checkpoint['best_mAP']:.1%}")
     
+    # Determine backbone and embed_dim
+    # Priority: command line args > checkpoint detection > config default
+    backbone_name = args.backbone if args.backbone else cfg.BACKBONE
+    embed_dim = args.embed_dim if args.embed_dim else checkpoint_embed_dim
+    
+    # Auto-detect backbone from embed_dim if not specified
+    if not args.backbone and checkpoint_embed_dim:
+        if checkpoint_embed_dim == 1024 and cfg.BACKBONE == 'dinov3_vitb16':
+            backbone_name = 'dinov3_vitl16'
+            logger.info(f"   Auto-detected backbone: {backbone_name} (from embed_dim={checkpoint_embed_dim})")
+    
+    logger.info(f"   Using backbone: {backbone_name}")
+    logger.info(f"   Using embed_dim: {embed_dim}")
+    
     # Create model
     logger.info("🏗️  Creating model...")
     model = make_model(
-        backbone_name=cfg.BACKBONE,
+        backbone_name=backbone_name,
         num_classes=num_classes,
-        embed_dim=cfg.EMBED_DIM,
+        embed_dim=embed_dim,
         pretrained=False,  # We're loading weights from checkpoint
         bn_neck=cfg.BN_NECK
     )
