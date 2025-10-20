@@ -21,9 +21,8 @@ This repository provides a complete pipeline for dog re-identification, includin
     - [5.2 Hyperparameter Overrides](#52-hyperparameter-overrides)
     - [5.3 Hyperparameter Sweeps](#53-hyperparameter-sweeps)
   - [6. Research Backbones](#6-research-backbones)
-  - [7. Performance Expectations](#7-performance-expectations)
-  - [8. Troubleshooting](#8-troubleshooting)
-  - [9. Next Steps](#9-next-steps)
+  - [7. Troubleshooting](#7-troubleshooting)
+  - [8. Next Steps](#8-next-steps)
 
 ---
 
@@ -152,11 +151,10 @@ images/
 
 
 
-**Docs & Demos**
+**Training**
 
 ```bash
-uv run python docs/demos/demo_albumentations.py
-uv run python docs/demos/example_petface_usage.py
+uv run python final_model/train_regional.py
 ```
 
 ---
@@ -185,15 +183,7 @@ uv run python docs/demos/example_petface_usage.py
 
 ### 3.2 Setup Steps
 
-**Step 1 — Generate splits**
-```bash
-cd /home/sagemaker-user/LostPet
-python3 create_petface_splits.py
-# Optional subset (faster):
-# python3 create_petface_splits.py --subset 2000
-```
-
-**Step 2 — Verify structure**
+**Step 1 — Verify structure**
 ```
 /home/sagemaker-user/LostPet/petface/
 ├── dog/
@@ -210,12 +200,12 @@ python3 create_petface_splits.py
     └── test_gallery.csv
 ```
 
-**Step 3 — Test DataLoader**
+**Step 2 — Test DataLoader**
 ```bash
 python3 example_petface_usage.py
 ```
 
-### 3.3 Output & Batch Format
+### 2.1 Output & Batch Format
 
 Each training batch returns:
 ```python
@@ -232,11 +222,11 @@ paths : List[str] length B      # original image paths
 
 ---
 
-## 4. Regional Feature Extraction
+## 3. Regional Feature Extraction
 
 > **Required:** Landmark JSONs for every image used. The loader raises errors if missing/invalid to ensure data quality.
 
-### 4.1 Dataset Class
+### 3.1 Dataset Class
 
 `datasets/dog_face_regional.py`:
 
@@ -257,7 +247,7 @@ dataset = DogFaceRegionalDataset(
 sample = dataset[0]
 ```
 
-### 4.2 Regions
+### 3.2 Regions
 
 | Region    | Description               |
 |-----------|---------------------------|
@@ -269,7 +259,7 @@ sample = dataset[0]
 | right_ear | Right ear                 |
 | forehead  | Forehead / upper face     |
 
-### 4.3 Landmark JSON Format
+### 3.3 Landmark JSON Format
 
 ```json
 {
@@ -293,9 +283,9 @@ sample = dataset[0]
 
 ---
 
-## 5. Training & Evaluation
+## 4. Training & Evaluation
 
-### 5.1 Quick Start
+### 4.1 Quick Start
 
 **Train (frozen backbone recommended first)**
 ```bash
@@ -307,7 +297,7 @@ uv run python launch.py   --output_dir ./outputs/exp_regional_default   --epochs
 uv run python launch.py   --output_dir ./outputs/exp_regional_default   --eval_only   --resume ./outputs/exp_regional_default/checkpoints/last.pth
 ```
 
-### 5.2 Hyperparameter Overrides
+### 4.2 Hyperparameter Overrides
 
 `launch.py` forwards unknown flags to the config layer, so **any hyperparameter** can be overridden:
 
@@ -315,9 +305,9 @@ uv run python launch.py   --output_dir ./outputs/exp_regional_default   --eval_o
 uv run python launch.py   --output_dir ./outputs/exp_tuned   --epochs 40   --base_lr 0.0003   --weight_decay 0.05   --triplet_margin 0.5   --bn_neck true   --image_size 256 256   --regional_size 128 128   --steps 30 50
 ```
 
-### 5.3 Hyperparameter Sweeps
+### 4.3 Hyperparameter Sweeps
 
-Use `docs/sweep.sh` to run LR/margin/BN/epochs grids and optional Center Loss:
+Use `hp_grid_search/sweep.sh` to run LR/margin/BN/epochs grids and optional Center Loss:
 
 ```bash
 bash docs/sweep.sh   --gpu 0   --epochs 20,40,60   --lrs 0.0002,0.0003,0.0005   --margins 0.3,0.5,0.8   --bns true,false   --center-sweep true --center-ws 0.0005,0.001   --root-out ./outputs/sweeps_$(date +%Y%m%d_%H%M%S)   --extra "--weight_decay 0.05 --warmup_iters 500"
@@ -346,18 +336,8 @@ Backbones with different capacity / “research headroom”:
 uv run python test_research_backbones.py
 ```
 
----
 
-## 7. Performance Expectations
-
-Regional features commonly yield:
-- Better discrimination among similar-looking dogs.  
-- Improved robustness to occlusions.  
-- Typical **+5–10% mAP** over a purely global model (dataset- and setup-dependent).
-
----
-
-## 8. Troubleshooting
+## 7. Troubleshooting
 
 **Missing directories / files**
 - Confirm `.../petface/dog` exists and contains per-identity folders.
@@ -381,7 +361,7 @@ Regional features commonly yield:
 
 ---
 
-## 9. Next Steps
+## 8. Next Steps
 
 1. Generate PetFace splits and verify structure.  
 2. Test the data loader (global and regional).  
