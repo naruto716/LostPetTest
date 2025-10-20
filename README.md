@@ -39,9 +39,56 @@ This repository provides a complete pipeline for dog re-identification, includin
 ---
 
 ## 2. Repository Structure
+```
+Data (images, CSV splits) ──▶ Datasets & Samplers ──▶ Processor (batches) ──▶ Model
+                                                 └──▶ Loss (ID / Triplet / Center)
+                                                            └──▶ Solver (optim & sched)
+                                                                           └──▶ Train / Eval Loops
+                                                                                      └──▶ Utils (logging, metrics)
+```
+
+- **config/**: Experiment configuration (backbone, hyper-params, data paths).  
+- **datasets/**: Dataset definitions, split scripts, dataloaders, samplers.  
+- **processor/**: Batch assembly, forward pass orchestration for training/eval.  
+- **model/**: Backbone registry, fusion layers, final embedding heads.  
+- **loss/**: ID (classification), triplet, optional center loss.  
+- **solver/**: Optimizer and LR scheduler factory.  
+- **train/**: Training entrypoints per setting (baseline, SWIN, DINOv3, regional, etc.).  
+- **utils/**: Logging, metrics, timers.  
+- **hp_grid_search/**: Sweep driver (`sweep.sh`) and launcher (`launch.py`).  
+- **final_model/**: Frozen/best configs and quick tests for delivery.  
+- **docs/**: How-tos and narrative docs.  
+- **splits/**, **splits_petface/**, **splits_petface_valid/**, **splits_petface_test_10k/**: CSV split files.  
+- **images/**: Optional sample images (gallery/query/train/val structure for demos).
+
+---
+Directory Map (Current)
+
+The list below reflects the current **top-level** organization you shared (non-exhaustive for files).
 
 ```
+config/
+  config_training.py
+  config_petface.py
+  config_resnet50_petface.py
+  config_dinov3{b,l,s}.py
+  config_swin{,b_petface,l,swint}.py
+  config_multilevel{,_advanced,_b,_swin}.py
+  config_research.py
+
+datasets/
+  create_petface_splits.py
+  create_valid_splits.py
+  create_large_test_split.py
+  filter_petface_valid_images.py
+  make_dataloader_{petface,dogreid,regional}.py
+  dog_face_regional{,_dataset}.py
+  dog_multipose.py
+  sampler.py
+  __init__.py
+
 docs/
+  README.md
   PETFACE_SETUP.md
   REGIONAL_EXTRACTION_GUIDE.md
   RESEARCH_BACKBONES.md
@@ -50,14 +97,60 @@ docs/
   demos/
     demo_albumentations.py
     example_petface_usage.py
-datasets/
-  make_dataloader_petface.py
-  dog_face_regional.py
-config_*.py
-create_petface_splits.py
-launch.py
-train_*.py
+
+final_model/
+  config_regional.py
+  test_regional_{dataloader,model,training_step}.py
+  train_regional.py
+
+hp_grid_search/
+  launch.py
+  sweep.sh
+
+loss/
+  id_loss.py
+  triplet.py
+  center.py
+  make_loss.py
+  __init__.py
+
+model/
+  backbones.py
+  attention_fusion.py
+  layers.py
+  make_model.py
+  __init__.py
+
+processor/
+  processor_{dogreid,regional}.py
+  __init__.py
+
+solver/
+  lr_scheduler.py
+  make_optimizer.py
+  __init__.py
+
+test/
+  test_*.py   # baselines, regional, backbones, pipeline, etc.
+
+train/
+  train_{dogreid,petface,resnet50_petface}.py
+  train_dinov3{b,l,s}.py
+  train_multilevel{,_b,_swin}.py
+  train_swin{,b_petface,l,swint}.py
+
+utils/
+  logger.py
+  meter.py
+  metrics.py
+  __init__.py
+
+splits*/  # various CSV split folders (train/val/test + query/gallery)
+images/
+  gallery/ | query/ | train/ | val/
 ```
+
+
 
 **Docs & Demos**
 
